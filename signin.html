@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scribble</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="fonts.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <div class="title-bar">
+    <div class="title-bar-left">
+      <img src="scribble logo.png" height="28" alt="Scribble">
+      <button class="window-btn" id="btn-darkmode" title="Dark mode" onclick="toggleDarkMode()">
+        <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14">
+          <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+          <circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M 8 1 L 8 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 8 13.5 L 8 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 1 8 L 2.5 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13.5 8 L 15 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 3 3 L 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 12 12 L 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13 3 L 12 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 4 12 L 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="window-controls">
+        <button class="window-btn" id="btn-minimize" title="Minimize">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 2.5 8 Q 8 9 13.5 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="window-btn" id="btn-maximize" title="Maximize">
+          <svg class="icon-maximize" viewBox="0 0 16 16" width="14" height="14">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <svg class="icon-restore" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+            <rect x="5" y="1.5" width="10" height="10" rx="1.5" ry="1.5" fill="var(--color-sticky)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <rect x="1.5" y="4.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="window-btn window-btn-close" id="btn-close" title="Close">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 3 3 Q 8 9 13 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M 13 3 Q 8 7 3 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div class="login-card">
+      <div style="text-align:center;margin-bottom:16px;">
+        <img src="scribble hero.png" style="max-width:100%;display:block;margin:0 auto;">
+        <p style="color:rgba(45,45,45,0.6);font-size:1.1rem;margin-top:-4px;">Pass notes. Stay connected.</p>
+      </div>
+
+      <div id="auth-card">
+        <h2 id="auth-title" style="font-family:'Kalam',cursive;font-size:1.5rem;margin-bottom:16px;">Sign In</h2>
+
+        <div id="signup-fields" class="hidden">
+          <input type="text" id="display-name-input" class="input" placeholder="Your name" style="margin-bottom:12px;">
+        </div>
+        <input type="email" id="email-input" class="input" placeholder="Email" style="margin-bottom:12px;">
+        <input type="password" id="password-input" class="input" placeholder="Password" style="margin-bottom:16px;">
+
+        <div id="error-message" style="color:var(--color-accent);margin-bottom:12px;display:none;font-size:0.9rem;"></div>
+
+        <button id="auth-submit" class="btn" style="width:100%;margin-bottom:12px;">Sign In</button>
+        <button id="auth-toggle" class="btn btn-secondary" style="width:100%;">Sign Up Instead</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    var isSignUp = false;
+
+    document.getElementById('auth-toggle').addEventListener('click', function() {
+      isSignUp = !isSignUp;
+      var title = document.getElementById('auth-title');
+      var submit = document.getElementById('auth-submit');
+      var toggle = document.getElementById('auth-toggle');
+      var signupFields = document.getElementById('signup-fields');
+      var error = document.getElementById('error-message');
+
+      if (isSignUp) {
+        title.textContent = 'Sign Up';
+        submit.textContent = 'Sign Up';
+        toggle.textContent = 'Sign In Instead';
+        signupFields.classList.remove('hidden');
+      } else {
+        title.textContent = 'Sign In';
+        submit.textContent = 'Sign In';
+        toggle.textContent = 'Sign Up Instead';
+        signupFields.classList.add('hidden');
+      }
+      error.style.display = 'none';
+    });
+
+    document.getElementById('auth-submit').addEventListener('click', function() {
+      var email = document.getElementById('email-input').value.trim();
+      var password = document.getElementById('password-input').value;
+      var displayName = document.getElementById('display-name-input').value.trim();
+      var error = document.getElementById('error-message');
+      error.style.display = 'none';
+
+      if (!email || !password) {
+        error.textContent = 'Please fill in all fields.';
+        error.style.display = 'block';
+        return;
+      }
+
+      if (isSignUp) {
+        if (!displayName) {
+          error.textContent = 'Please enter your name.';
+          error.style.display = 'block';
+          return;
+        }
+        signUp(email, password, displayName).catch(function(err) {
+          error.textContent = err.message;
+          error.style.display = 'block';
+        });
+      } else {
+        signIn(email, password).catch(function(err) {
+          error.textContent = err.message;
+          error.style.display = 'block';
+        });
+      }
+    });
+
+    document.getElementById('password-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('auth-submit').click();
+    });
+
+    initTheme();
+
+    if (window.__TAURI__) {
+      var appWin = window.__TAURI__.window.getCurrentWindow();
+
+      document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
+      document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+
+      appWin.isMaximized().then(function(maximized) {
+        toggleMaximizeIcons(maximized);
+      });
+      appWin.onResized(function() {
+        appWin.isMaximized().then(function(maximized) { toggleMaximizeIcons(maximized); });
+      });
+    }
+
+    function toggleMaximizeIcons(maximized) {
+      var maxIcon = document.querySelector('.icon-maximize');
+      var resIcon = document.querySelector('.icon-restore');
+      if (maxIcon && resIcon) {
+        maxIcon.style.display = maximized ? 'none' : 'block';
+        resIcon.style.display = maximized ? 'block' : 'none';
+      }
+      var btn = document.getElementById('btn-maximize');
+      if (btn) btn.title = maximized ? 'Restore' : 'Maximize';
+    }
+
+    function initTheme() {
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark');
+        updateThemeIcons(true);
+      }
+    }
+
+    function toggleDarkMode() {
+      var isDark = document.body.classList.toggle('dark');
+      localStorage.setItem('darkMode', isDark);
+      updateThemeIcons(isDark);
+    }
+
+    function updateThemeIcons(isDark) {
+      var moon = document.querySelector('.icon-moon');
+      var sun = document.querySelector('.icon-sun');
+      if (moon && sun) {
+        moon.style.display = isDark ? 'none' : 'block';
+        sun.style.display = isDark ? 'block' : 'none';
+      }
+      var btn = document.getElementById('btn-darkmode');
+      if (btn) btn.title = isDark ? 'Light mode' : 'Dark mode';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+  padding: 24px;
+}
+
+.screen.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.screen.exit {
+  opacity: 0;
+  transform: translateX(-40px);
+}
+
+.screen.exit-reverse {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+.splash {
+  opacity: 0;
+  transform: none;
+  transition: opacity 0.5s ease;
+}
+
+.splash.active {
+  opacity: 1;
+}
+
+.splash.exit {
+  opacity: 0;
+  transform: none;
+}
+
+.splash-title {
+  font-family: 'Kalam', cursive;
+  font-weight: 700;
+  font-size: 72px;
+  color: #2d2d2d;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: fade-up 0.6s ease forwards;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.splash-underline {
+  display: block;
+  margin: 0 auto;
+  margin-top: 8px;
+}
+
+.splash-underline svg {
+  display: block;
+  width: 200px;
+  stroke: #ff4d4d;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  fill: none;
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: draw-line 0.5s ease forwards;
+  animation-delay: 0.7s;
+}
+
+@keyframes draw-line {
+  to { stroke-dashoffset: 0; }
+}
+
+.card {
+  background: #ffffff;
+  border: 3px solid #2d2d2d;
+  border-radius: 15px 255px 15px 225px / 225px 15px 255px 15px;
+  box-shadow: 8px 8px 0px 0px #2d2d2d;
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.card-rotate-1 { transform: rotate(-1deg); }
+.card-rotate-2 { transform: rotate(1deg); }
+.card-rotate-3 { transform: rotate(-0.5deg); }
+
+.onboarding-card {
+  animation: card-in 0.4s ease forwards;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(16px) rotate(-1deg); }
+  to { opacity: 1; transform: translateY(0) rotate(-1deg); }
+}
+
+.card-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.card-icon svg {
+  width: 56px;
+  height: 56px;
+  stroke: #2d2d2d;
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card h1 {
+  font-family: 'Kalam', cursive;
+  font-weight: 700;
+  font-size: 32px;
+  color: #2d2d2d;
+  text-align: center;
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.card p {
+  font-family: 'Patrick Hand', cursive;
+  font-size: 17px;
+  color: rgba(45, 45, 45, 0.65);
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(45, 45, 45, 0.2);
+  transition: background 0.3s, transform 0.3s;
+}
+
+.dot.active {
+  background: #2d2d2d;
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+.btn-primary {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-family: 'Patrick Hand', cursive;
+  font-size: 19px;
+  color: #2d2d2d;
+  background: #ffffff;
+  border: 3px solid #2d2d2d;
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  box-shadow: 4px 4px 0px 0px #2d2d2d;
+  padding: 14px 0;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  min-height: 52px;
+  text-decoration: none;
+}
+
+.btn-primary:hover {
+  background: #ff4d4d;
+  color: #ffffff;
+  box-shadow: 2px 2px 0px 0px #2d2d2d;
+  transform: translate(2px, 2px);
+}
+
+.btn-primary:active {
+  box-shadow: none;
+  transform: translate(4px, 4px);
+}
+
+.skip-link {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Patrick Hand', cursive;
+  font-size: 14px;
+  color: rgba(45, 45, 45, 0.4);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.1s;
+  background: none;
+  border: none;
+  z-index: 10;
+}
+
+.skip-link:hover {
+  color: #2d2d2d;
+}
+
+.wobbly-input {
+  font-family: 'Patrick Hand', cursive;
+  font-size: 16px;
+  border: 2px solid #2d2d2d;
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  background: #ffffff;
+  padding: 12px 16px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.wobbly-input:focus {
+  border-color: #2d5da1;
+  box-shadow: 0 0 0 3px rgba(45, 93, 161, 0.2);
+}
+
+.wobbly-input::placeholder {
+  color: rgba(45, 45, 45, 0.35);
+}
+
+.auth-toggle {
+  text-align: center;
+  margin-top: 14px;
+  font-family: 'Patrick Hand', cursive;
+  font-size: 15px;
+  color: rgba(45, 45, 45, 0.5);
+  cursor: pointer;
+  background: none;
+  border: none;
+  display: block;
+  width: 100%;
+  transition: color 0.1s;
+}
+
+.auth-toggle:hover {
+  color: #2d2d2d;
+}
+
+.error-msg {
+  font-family: 'Patrick Hand', cursive;
+  font-size: 14px;
+  color: #ff4d4d;
+  text-align: center;
+  display: none;
+  margin-bottom: 12px;
+}
+
+.shake {
+  animation: shake 0.4s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px) rotate(-0.5deg); }
+  40% { transform: translateX(8px) rotate(0.5deg); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+.avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  border: 3px solid #2d2d2d;
+  box-shadow: 4px 4px 0px 0px #2d2d2d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-family: 'Kalam', cursive;
+  font-weight: 700;
+  font-size: 32px;
+  color: #ffffff;
+  transition: background 0.2s;
+}
+
+.colour-swatches {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #2d2d2d;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 2px 2px 0px 0px #2d2d2d;
+}
+
+.swatch.selected {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #2d2d2d;
+}
+
+.youre-in {
+  font-family: 'Kalam', cursive;
+  font-weight: 700;
+  font-size: 56px;
+  color: #2d2d2d;
+  opacity: 0;
+  transform: scale(0.9);
+  animation: youre-in 0.8s ease forwards;
+}
+
+@keyframes youre-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transition: transform 0.8s ease, opacity 0.8s ease;
+  pointer-events: none;
+  margin-left: -4px;
+  margin-top: -4px;
+}
+
+.confetti.burst {
+  transform: rotate(var(--angle)) translateY(calc(var(--dist) * -1));
+  opacity: 0;
+}
+
+.bg-doodle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.doodle-spiral {
+  top: 50px;
+  left: 40px;
+  opacity: 0.18;
+  animation: float-a 6s ease-in-out infinite;
+}
+
+.doodle-asterisk {
+  bottom: 60px;
+  right: 40px;
+  opacity: 0.15;
+  animation: float-b 8s ease-in-out infinite;
+}
+
+.doodle-dashes {
+  top: 60px;
+  right: 48px;
+  opacity: 0.12;
+  animation: float-a 7s ease-in-out infinite;
+}
+
+@keyframes float-a {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(3deg); }
+}
+
+@keyframes float-b {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(8px) rotate(-4deg); }
+}
+
+.corner-bracket {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.08;
+}
+
+.corner-tl {
+  top: 12px;
+  left: 12px;
+}
+
+.corner-br {
+  bottom: 12px;
+  right: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.auth-hint {
+  font-size: 13px;
+  color: rgba(45, 45, 45, 0.35);
+  text-align: center;
+  margin-top: 8px;
+}

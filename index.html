@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scribble</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="onboarding.css">
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <div class="title-bar">
+    <div class="title-bar-left">
+      <img src="scribble logo.png" height="28" alt="Scribble">
+      <button class="window-btn" id="btn-darkmode" title="Dark mode" onclick="toggleDarkMode()">
+        <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14">
+          <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+          <circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M 8 1 L 8 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 8 13.5 L 8 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 1 8 L 2.5 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13.5 8 L 15 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 3 3 L 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 12 12 L 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13 3 L 12 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 4 12 L 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="window-controls">
+        <button class="window-btn" id="btn-minimize" title="Minimize">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 2.5 8 Q 8 9 13.5 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="window-btn" id="btn-maximize" title="Maximize">
+          <svg class="icon-maximize" viewBox="0 0 16 16" width="14" height="14">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <svg class="icon-restore" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+            <rect x="5" y="1.5" width="10" height="10" rx="1.5" ry="1.5" fill="var(--color-sticky)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <rect x="1.5" y="4.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="window-btn window-btn-close" id="btn-close" title="Close">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 3 3 Q 8 9 13 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M 13 3 Q 8 7 3 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <svg class="bg-doodle doodle-spiral" width="80" height="80" viewBox="0 0 80 80" fill="none">
+    <path d="M 10 10 C 15 5 25 8 28 14 C 33 22 22 35 15 30 C 8 25 18 10 28 12 C 38 14 42 32 30 38 C 18 44 10 28 20 18 C 30 8 48 12 48 28" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+  <svg class="bg-doodle doodle-asterisk" width="60" height="60" viewBox="0 0 60 60" fill="none">
+    <path d="M 30 10 L 30 50" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 10 30 L 50 30" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 16 16 L 44 44" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 44 16 L 16 44" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+
+  <svg class="bg-doodle doodle-dashes" width="50" height="40" viewBox="0 0 50 40" fill="none">
+    <path d="M 5 8 C 10 5 18 6 22 10" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 12 18 C 20 14 28 16 34 20" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 20 30 C 28 26 38 28 44 32" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>
+
+  <svg class="corner-bracket corner-tl" width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <path d="M 0 24 L 0 0 L 24 0" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+  <svg class="corner-bracket corner-br" width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <path d="M 24 0 L 24 24 L 0 24" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+  <div class="screen splash active" id="screen-0">
+    <div style="text-align:center;">
+      <div class="splash-title">Scribble</div>
+      <span class="splash-underline">
+        <svg viewBox="0 0 200 10">
+          <path d="M 2 6 C 24 2 50 10 74 6 C 100 2 124 10 148 6 C 168 2 186 8 198 5" stroke="#ff4d4d" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+        </svg>
+      </span>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-1">
+    <div class="card card-rotate-1 onboarding-card">
+      <div class="card-icon">
+        <svg viewBox="0 0 56 56">
+          <path d="M 4 10 C 4 7.5 6 6 8 6 L 48 6 C 50 6 52 7.5 52 10 L 52 38 C 52 40.5 50 42 48 42 L 28 42 L 14 50 L 14 42 L 8 42 C 6 42 4 40.5 4 38 L 4 10 Z"/>
+          <path d="M 8 16 L 28 28 L 48 16" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>Chat like you're passing notes.</h1>
+      <p>Send messages, share images, and talk in real time &mdash; all in one place.</p>
+      <div class="dots">
+        <div class="dot" id="dot-1"></div>
+        <div class="dot active"></div>
+        <div class="dot" id="dot-3"></div>
+      </div>
+      <button class="btn-primary" onclick="nextSlide()">Next &rarr;</button>
+    </div>
+    <button class="skip-link" onclick="goToScreen(4)">Skip</button>
+  </div>
+
+  <div class="screen" id="screen-2">
+    <div class="card card-rotate-2 onboarding-card">
+      <div class="card-icon">
+        <svg viewBox="0 0 56 56">
+          <path d="M 10 10 L 30 10" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 10 20 L 45 20" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 10 30 L 35 30" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 10 40 L 42 40" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>Jump into channels.</h1>
+      <p>Join public rooms and talk about anything. Or go private with a direct message.</p>
+      <div class="dots">
+        <div class="dot" id="dot-1"></div>
+        <div class="dot" id="dot-2"></div>
+        <div class="dot active"></div>
+      </div>
+      <button class="btn-primary" onclick="nextSlide()">Next &rarr;</button>
+    </div>
+    <button class="skip-link" onclick="goToScreen(4)">Skip</button>
+  </div>
+
+  <div class="screen" id="screen-3">
+    <div class="card card-rotate-3 onboarding-card">
+      <div class="card-icon">
+        <svg viewBox="0 0 56 56">
+          <path d="M 28 4 L 32 18 L 46 18 L 34 26 L 38 40 L 28 32 L 18 40 L 22 26 L 10 18 L 24 18 Z"/>
+        </svg>
+      </div>
+      <h1>It's yours.</h1>
+      <p>Pick a name, choose your colour, and make it feel like home.</p>
+      <div class="dots">
+        <div class="dot active"></div>
+        <div class="dot" id="dot-2"></div>
+        <div class="dot" id="dot-3"></div>
+      </div>
+      <button class="btn-primary" onclick="goToScreen(4)">Let's get started</button>
+    </div>
+    <button class="skip-link" onclick="goToScreen(4)">Skip</button>
+  </div>
+
+  <div class="screen" id="screen-4">
+    <div class="card card-rotate-1" id="auth-card">
+      <h1 id="auth-heading">Create your account.</h1>
+
+      <div id="signup-fields" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;">
+        <input type="text" id="display-name-input" class="wobbly-input" placeholder="Your name">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;">
+        <input type="email" id="email-input" class="wobbly-input" placeholder="Email address">
+        <input type="password" id="password-input" class="wobbly-input" placeholder="Password">
+      </div>
+
+      <div id="confirm-field" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;">
+        <input type="password" id="confirm-input" class="wobbly-input" placeholder="Confirm password">
+      </div>
+
+      <div class="error-msg" id="auth-error"></div>
+
+      <button class="btn-primary" id="auth-btn" onclick="handleAuth()">Create account</button>
+      <button class="auth-toggle" id="auth-toggle" onclick="toggleAuthMode()" style="margin-top:8px;">Already have one? Sign in &rarr;</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-5">
+    <div class="card card-rotate-2 onboarding-card">
+      <h1>What should we call you?</h1>
+
+      <div class="avatar-preview" id="avatar-preview" style="background:#2d5da1;">S</div>
+
+      <p style="margin-bottom:12px;font-size:15px;">Pick a colour:</p>
+      <div class="colour-swatches">
+        <div class="swatch" style="background:#ff4d4d;" data-colour="#ff4d4d" onclick="selectColour(this)"></div>
+        <div class="swatch selected" style="background:#2d5da1;" data-colour="#2d5da1" onclick="selectColour(this)"></div>
+        <div class="swatch" style="background:#f5c842;" data-colour="#f5c842" onclick="selectColour(this)"></div>
+        <div class="swatch" style="background:#4caf7d;" data-colour="#4caf7d" onclick="selectColour(this)"></div>
+        <div class="swatch" style="background:#9b59b6;" data-colour="#9b59b6" onclick="selectColour(this)"></div>
+        <div class="swatch" style="background:#2d2d2d;" data-colour="#2d2d2d" onclick="selectColour(this)"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;">
+        <input type="text" id="profile-name-input" class="wobbly-input" placeholder="Your display name" oninput="updateAvatarPreview()">
+      </div>
+
+      <button class="btn-primary" onclick="saveProfile()">That's me!</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-6">
+    <div class="youre-in">&#10038; You're in. &#10038;</div>
+
+    <div id="confetti-container"></div>
+  </div>
+
+  <script>
+    if (window.__TAURI__) {
+      var appWin = window.__TAURI__.window.getCurrentWindow();
+      document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
+      document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+      appWin.isMaximized().then(function(max) { toggleMaxIcons(max); });
+      appWin.onResized(function() {
+        appWin.isMaximized().then(function(max) { toggleMaxIcons(max); });
+      });
+    }
+
+    function toggleMaxIcons(max) {
+      var mx = document.querySelector('.icon-maximize');
+      var rs = document.querySelector('.icon-restore');
+      if (mx && rs) { mx.style.display = max ? 'none' : 'block'; rs.style.display = max ? 'block' : 'none'; }
+      var btn = document.getElementById('btn-maximize');
+      if (btn) btn.title = max ? 'Restore' : 'Maximize';
+    }
+
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.body.classList.add('dark');
+    }
+
+    function toggleDarkMode() {
+      var isDark = document.body.classList.toggle('dark');
+      localStorage.setItem('darkMode', isDark);
+      var moon = document.querySelector('.icon-moon');
+      var sun = document.querySelector('.icon-sun');
+      if (moon && sun) {
+        moon.style.display = isDark ? 'none' : 'block';
+        sun.style.display = isDark ? 'block' : 'none';
+      }
+      var btn = document.getElementById('btn-darkmode');
+      if (btn) btn.title = isDark ? 'Light mode' : 'Dark mode';
+    }
+  </script>
+
+  <script src="onboarding.js"></script>
+</body>
+</html>
