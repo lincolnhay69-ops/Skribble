@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scribble - Profile</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="fonts.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <div class="title-bar">
+    <div class="title-bar-left">
+      <img src="scribble logo.png" height="28" alt="Scribble">
+      <button class="window-btn" id="btn-darkmode" title="Dark mode" onclick="toggleDarkMode()">
+        <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14">
+          <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+          <circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M 8 1 L 8 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 8 13.5 L 8 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 1 8 L 2.5 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13.5 8 L 15 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 3 3 L 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 12 12 L 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 13 3 L 12 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 4 12 L 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="window-controls">
+        <button class="window-btn" id="btn-minimize" title="Minimize">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 2.5 8 Q 8 9 13.5 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="window-btn" id="btn-maximize" title="Maximize">
+          <svg class="icon-maximize" viewBox="0 0 16 16" width="14" height="14">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <svg class="icon-restore" viewBox="0 0 16 16" width="14" height="14" style="display:none;">
+            <rect x="5" y="1.5" width="10" height="10" rx="1.5" ry="1.5" fill="var(--color-sticky)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <rect x="1.5" y="4.5" width="11" height="11" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="window-btn window-btn-close" id="btn-close" title="Close">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M 3 3 Q 8 9 13 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M 13 3 Q 8 7 3 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div class="card tape" style="width:90%;max-width:420px;text-align:center;padding:32px;">
+      <div id="profile-avatar" style="margin-bottom:16px;display:flex;justify-content:center;"></div>
+
+      <h1 id="profile-name" style="font-family:'Kalam',cursive;font-size:2rem;margin-bottom:4px;cursor:pointer;" onclick="editName()">Loading...</h1>
+      <p id="profile-email" style="color:rgba(45,45,45,0.6);margin-bottom:24px;"></p>
+
+      <div class="card card-postit" style="padding:14px 18px;text-align:left;margin-bottom:20px;font-size:1.5rem;line-height:1.5;">
+        <div>✦ messages <strong id="msg-count">0</strong></div>
+        <div>✦ joined <strong id="joined-date">—</strong></div>
+        <div>✦ following <strong id="following-count">0</strong></div>
+        <div>✦ followers <strong id="followers-count">0</strong></div>
+      </div>
+
+      <button class="btn btn-secondary" style="width:100%;margin-bottom:8px;" onclick="window.location.href='chat.html'">Back to Chat</button>
+      <button class="btn" style="width:100%;margin-bottom:8px;" onclick="signOutAndRedirect()">Log Out</button>
+      <button class="btn btn-danger" style="width:100%;" onclick="showDeleteModal()">Delete Account</button>
+    </div>
+  </div>
+
+  <div id="delete-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div class="card tape" style="width:90%;max-width:380px;padding:24px;text-align:center;">
+      <h2 style="font-family:'Kalam',cursive;margin-bottom:12px;">Delete Account</h2>
+      <p style="margin-bottom:16px;font-size:0.9rem;">This permanently deletes your account, removes your DMs, and anonymizes your channel messages. <strong>This cannot be undone.</strong></p>
+      <input id="delete-password" type="password" class="input" placeholder="Enter your password" style="margin-bottom:12px;">
+      <p id="delete-error" style="color:var(--color-accent);display:none;margin-bottom:8px;font-size:0.85rem;"></p>
+      <button class="btn btn-danger" style="width:100%;margin-bottom:8px;" onclick="deleteAccount()">Delete My Account</button>
+      <button class="btn btn-secondary" style="width:100%;" onclick="hideDeleteModal()">Cancel</button>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    var currentProfileUser = null;
+
+    auth.onAuthStateChanged(function(user) {
+      if (!user) return;
+      currentProfileUser = user;
+
+      var initial = user.displayName ? user.displayName.charAt(0).toUpperCase() : '?';
+      document.getElementById('profile-avatar').innerHTML = '<div class="avatar avatar-lg avatar-fallback">' + initial + '</div>';
+      document.getElementById('profile-name').textContent = user.displayName || 'Unnamed';
+      document.getElementById('profile-email').textContent = user.email;
+
+      db.ref('users/' + user.uid).once('value').then(function(snapshot) {
+        if (snapshot.exists()) {
+          var data = snapshot.val();
+          if (data.createdAt) {
+            var date = new Date(data.createdAt);
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            document.getElementById('joined-date').textContent = months[date.getMonth()] + ' ' + date.getFullYear();
+          }
+        }
+      });
+
+      db.ref('channels').once('value').then(function(snapshot) {
+        var totalCount = 0;
+        var completed = 0;
+        var channelCount = 0;
+        snapshot.forEach(function() { channelCount++; });
+        if (channelCount === 0) {
+          document.getElementById('msg-count').textContent = '0';
+          return;
+        }
+        snapshot.forEach(function(channelChild) {
+          db.ref('channels/' + channelChild.key + '/messages').once('value').then(function(msgSnapshot) {
+            msgSnapshot.forEach(function(msgChild) {
+              if (msgChild.val().senderId === user.uid) totalCount++;
+            });
+            completed++;
+            if (completed === channelCount) {
+              document.getElementById('msg-count').textContent = totalCount;
+            }
+          });
+        });
+      });
+
+      db.ref('users/' + user.uid + '/followers').once('value').then(function(snapshot) {
+        var count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+        document.getElementById('followers-count').textContent = count;
+      });
+
+      db.ref('users/' + user.uid + '/following').once('value').then(function(snapshot) {
+        var count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+        document.getElementById('following-count').textContent = count;
+      });
+    });
+
+    function editName() {
+      var nameEl = document.getElementById('profile-name');
+      var currentName = nameEl.textContent;
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'input';
+      input.value = currentName;
+      input.style.fontFamily = "'Kalam',cursive";
+      input.style.fontSize = '2rem';
+      input.style.textAlign = 'center';
+      input.style.marginBottom = '4px';
+
+      nameEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      input.addEventListener('blur', function() { saveName(input); });
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') input.blur();
+      });
+    }
+
+    function saveName(input) {
+      var newName = input.value.trim() || 'Unnamed';
+
+      var nameEl = document.createElement('h1');
+      nameEl.id = 'profile-name';
+      nameEl.style.fontFamily = "'Kalam',cursive";
+      nameEl.style.fontSize = '2rem';
+      nameEl.style.marginBottom = '4px';
+      nameEl.style.cursor = 'pointer';
+      nameEl.textContent = newName;
+      nameEl.onclick = editName;
+
+      input.replaceWith(nameEl);
+
+      if (auth.currentUser) {
+        auth.currentUser.updateProfile({ displayName: newName });
+        db.ref('users/' + auth.currentUser.uid).update({ displayName: newName });
+      }
+    }
+
+    function signOutAndRedirect() {
+      auth.signOut().then(function() {
+        localStorage.removeItem('onboardingComplete');
+        window.location.href = 'index.html';
+      });
+    }
+
+    function showDeleteModal() {
+      document.getElementById('delete-password').value = '';
+      document.getElementById('delete-error').style.display = 'none';
+      document.getElementById('delete-modal').style.display = 'flex';
+    }
+
+    function hideDeleteModal() {
+      document.getElementById('delete-modal').style.display = 'none';
+    }
+
+    function deleteAccount() {
+      var password = document.getElementById('delete-password').value;
+      var errorEl = document.getElementById('delete-error');
+      if (!password) {
+        errorEl.textContent = 'Please enter your password.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      var user = auth.currentUser;
+      if (!user || !user.email) return;
+
+      var credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
+
+      user.reauthenticateWithCredential(credential).then(function() {
+        return db.ref('channels').once('value');
+      }).then(function(chSnapshot) {
+        var updates = {};
+        chSnapshot.forEach(function(ch) {
+          var chName = ch.key;
+          var msgs = ch.val().messages;
+          if (!msgs) return;
+          Object.keys(msgs).forEach(function(msgKey) {
+            if (msgs[msgKey].senderId === user.uid) {
+              updates['channels/' + chName + '/messages/' + msgKey + '/senderId'] = 'deleted';
+              updates['channels/' + chName + '/messages/' + msgKey + '/senderName'] = 'Unknown User';
+            }
+          });
+        });
+        if (Object.keys(updates).length === 0) return Promise.resolve();
+        return db.ref().update(updates);
+      }).then(function() {
+        return db.ref('dms').once('value');
+      }).then(function(dmSnapshot) {
+        var dels = [];
+        dmSnapshot.forEach(function(dm) {
+          if (dm.val().participants && dm.val().participants[user.uid]) {
+            dels.push(db.ref('dms/' + dm.key).remove());
+          }
+        });
+        return Promise.all(dels);
+      }).then(function() {
+        return db.ref('users/' + user.uid).remove();
+      }).then(function() {
+        return user.delete();
+      }).then(function() {
+        localStorage.removeItem('onboardingComplete');
+        localStorage.removeItem('darkMode');
+        window.location.href = 'index.html';
+      }).catch(function(err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      });
+    }
+
+    initTheme();
+
+    if (window.__TAURI__) {
+      var appWin = window.__TAURI__.window.getCurrentWindow();
+
+      document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
+      document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+
+      appWin.isMaximized().then(function(maximized) {
+        toggleMaximizeIcons(maximized);
+      });
+      appWin.onResized(function() {
+        appWin.isMaximized().then(function(maximized) { toggleMaximizeIcons(maximized); });
+      });
+    }
+
+    function toggleMaximizeIcons(maximized) {
+      var maxIcon = document.querySelector('.icon-maximize');
+      var resIcon = document.querySelector('.icon-restore');
+      if (maxIcon && resIcon) {
+        maxIcon.style.display = maximized ? 'none' : 'block';
+        resIcon.style.display = maximized ? 'block' : 'none';
+      }
+      var btn = document.getElementById('btn-maximize');
+      if (btn) btn.title = maximized ? 'Restore' : 'Maximize';
+    }
+
+    function initTheme() {
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark');
+        updateThemeIcons(true);
+      }
+    }
+
+    function toggleDarkMode() {
+      var isDark = document.body.classList.toggle('dark');
+      localStorage.setItem('darkMode', isDark);
+      updateThemeIcons(isDark);
+    }
+
+    function updateThemeIcons(isDark) {
+      var moon = document.querySelector('.icon-moon');
+      var sun = document.querySelector('.icon-sun');
+      if (moon && sun) {
+        moon.style.display = isDark ? 'none' : 'block';
+        sun.style.display = isDark ? 'block' : 'none';
+      }
+      var btn = document.getElementById('btn-darkmode');
+      if (btn) btn.title = isDark ? 'Light mode' : 'Dark mode';
+    }
+  </script>
+</body>
+</html>
