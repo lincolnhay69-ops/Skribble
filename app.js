@@ -418,7 +418,9 @@ function notifyMessage(msg, source) {
   if (!window.__TAURI__) return;
   var title = "Scribble - " + source;
   var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
-  window.__TAURI__.core.invoke('notify', { title: title, body: body });
+  window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
+    console.error('Notification failed:', e);
+  });
 }
 
 function showToast(text) {
