@@ -23,13 +23,6 @@
     },
     "withGlobalTauri": true
   },
-  "plugins": {
-    "notification": {
-      "all": {
-        "icon": "icons/128x128.png"
-      }
-    }
-  },
   "bundle": {
     "active": true,
     "targets": "all",
