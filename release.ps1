@@ -53,7 +53,7 @@ Write-Host ""
 # 4. Locate artifacts (build if missing)
 $nsisDir = [System.IO.Path]::Combine($scriptRoot, "src-tauri", "target", "release", "bundle", "nsis")
 $msiDir = [System.IO.Path]::Combine($scriptRoot, "src-tauri", "target", "release", "bundle", "msi")
-$exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Select-Object -First 1
+$exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Where-Object { $_.Name -like "*$version*" } | Select-Object -First 1
 
 if (-not $exe) {
     Write-Host "=== Building Scribble v$version ===" -ForegroundColor Magenta
@@ -64,7 +64,7 @@ if (-not $exe) {
         throw "Build failed! Check the output above for errors."
     }
     Write-Host "Build successful!" -ForegroundColor Green
-    $exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Select-Object -First 1
+    $exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Where-Object { $_.Name -like "*$version*" } | Select-Object -First 1
 } else {
     Write-Host "Build artifacts found, skipping build..." -ForegroundColor Yellow
 }
