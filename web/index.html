@@ -216,7 +216,7 @@
       var appWin = window.__TAURI__.window.getCurrentWindow();
       document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
       document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
-      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.hide(); });
       appWin.isMaximized().then(function(max) { toggleMaxIcons(max); });
       appWin.onResized(function() {
         appWin.isMaximized().then(function(max) { toggleMaxIcons(max); });

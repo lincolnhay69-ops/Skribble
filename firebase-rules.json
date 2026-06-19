@@ -1,0 +1,54 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "userDMs": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "dms": {
+      "$dmId": {
+        ".read": "root.child('userDMs').child(auth.uid).child($dmId).exists()",
+        ".write": "root.child('userDMs').child(auth.uid).child($dmId).exists() || (!data.exists() && newData.child('participants').hasChild(auth.uid))",
+        "messages": {
+          ".read": "root.child('userDMs').child(auth.uid).child($dmId).exists()",
+          ".write": "root.child('userDMs').child(auth.uid).child($dmId).exists()"
+        }
+      }
+    },
+    "friendRequests": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "channels": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$channelId": {
+        "messages": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    },
+    "groups": {
+      "$groupId": {
+        ".read": "data.child('members').hasChild(auth.uid)",
+        ".write": "data.child('members').hasChild(auth.uid) || (!data.exists() && newData.child('members').hasChild(auth.uid))",
+        "messages": {
+          ".read": "data.child('members').hasChild(auth.uid)",
+          ".write": "data.child('members').hasChild(auth.uid)"
+        }
+      }
+    },
+    "appVersion": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

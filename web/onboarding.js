@@ -8,21 +8,19 @@ var TOTAL_SCREENS = 7;
 init();
 
 function init() {
-  var params = new URLSearchParams(window.location.search);
-
-  var complete = localStorage.getItem('onboardingComplete') === 'true';
-  if (complete) {
-    auth.onAuthStateChanged(function(user) {
-      if (user) {
-        window.location.href = 'chat.html';
-      } else {
-        goToScreen(4);
-        setAuthMode(false);
-      }
-    });
-    return;
-  }
-  startSplash();
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      window.location.href = 'chat.html';
+      return;
+    }
+    var complete = localStorage.getItem('onboardingComplete') === 'true';
+    if (complete) {
+      goToScreen(4);
+      setAuthMode(false);
+      return;
+    }
+    startSplash();
+  });
 }
 
 function startSplash() {
