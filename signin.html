@@ -128,12 +128,16 @@
           error.style.display = 'block';
           return;
         }
-        signUp(email, password, displayName).catch(function(err) {
+        signUp(email, password, displayName).then(function() {
+          localStorage.setItem('onboardingComplete', 'true');
+        }).catch(function(err) {
           error.textContent = err.message;
           error.style.display = 'block';
         });
       } else {
-        signIn(email, password).catch(function(err) {
+        signIn(email, password).then(function() {
+          localStorage.setItem('onboardingComplete', 'true');
+        }).catch(function(err) {
           error.textContent = err.message;
           error.style.display = 'block';
         });
@@ -151,7 +155,7 @@
 
       document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
       document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
-      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.hide(); });
 
       appWin.isMaximized().then(function(maximized) {
         toggleMaximizeIcons(maximized);

@@ -73,6 +73,17 @@
       <hr class="sidebar-divider">
 
       <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 12px;">
+        <span class="sidebar-section-title" style="padding:0;">Groups</span>
+        <div style="display:flex;gap:4px;">
+          <button onclick="showCreateGroupModal()" style="background:none;border:2px solid var(--color-border);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;width:32px;height:32px;cursor:pointer;font-family:var(--font-heading);font-size:1.2rem;line-height:1;display:flex;align-items:center;justify-content:center;" title="Create Group">+</button>
+          <button onclick="showJoinGroupModal()" style="background:none;border:2px solid var(--color-border);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;width:32px;height:32px;cursor:pointer;font-family:var(--font-heading);font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;" title="Join Group">🔗</button>
+        </div>
+      </div>
+      <div id="group-list"></div>
+
+      <hr class="sidebar-divider">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 12px;">
         <span class="sidebar-section-title" style="padding:0;">Direct Messages</span>
         <button onclick="showNewDMModal()" style="background:none;border:2px solid var(--color-border);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;width:32px;height:32px;cursor:pointer;font-family:var(--font-heading);font-size:1.2rem;line-height:1;display:flex;align-items:center;justify-content:center;">+</button>
       </div>
@@ -132,6 +143,26 @@
     </div>
   </div>
 
+  <div id="create-group-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)hideCreateGroupModal()">
+    <div class="card" style="width:90%;max-width:400px;padding:24px;" onclick="event.stopPropagation()">
+      <h3 style="font-family:'Kalam',cursive;font-size:1.3rem;margin-bottom:16px;">Create Group</h3>
+      <input type="text" id="group-name-input" class="input" placeholder="Group name" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')createGroup()">
+      <p style="font-size:0.85rem;color:rgba(45,45,45,0.5);margin-bottom:16px;">A random 6-character join code will be generated. Share it with friends so they can join.</p>
+      <button class="btn" style="width:100%;margin-bottom:8px;" onclick="createGroup()">Create Group</button>
+      <button class="btn btn-secondary" style="width:100%;" onclick="hideCreateGroupModal()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="join-group-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)hideJoinGroupModal()">
+    <div class="card" style="width:90%;max-width:400px;padding:24px;" onclick="event.stopPropagation()">
+      <h3 style="font-family:'Kalam',cursive;font-size:1.3rem;margin-bottom:16px;">Join Group</h3>
+      <input type="text" id="join-code-input" class="input" placeholder="Enter join code" style="margin-bottom:12px;text-transform:uppercase;" onkeydown="if(event.key==='Enter')joinGroup()">
+      <p id="join-group-error" style="color:var(--color-accent);display:none;margin-bottom:8px;font-size:0.85rem;"></p>
+      <button class="btn" style="width:100%;margin-bottom:8px;" onclick="joinGroup()">Join Group</button>
+      <button class="btn btn-secondary" style="width:100%;" onclick="hideJoinGroupModal()">Cancel</button>
+    </div>
+  </div>
+
   <div id="toast" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);background:var(--color-accent);color:#fff;padding:8px 20px;border-radius:255px 15px 225px 15px/15px 225px 15px 255px;font-size:0.9rem;z-index:9999;pointer-events:none;white-space:nowrap;transition:opacity 0.3s;"></div>
 
   <script src="auth.js"></script>
@@ -139,16 +170,12 @@
   <script>
     initTheme();
 
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-
     if (window.__TAURI__) {
       var appWin = window.__TAURI__.window.getCurrentWindow();
 
       document.getElementById('btn-minimize').addEventListener('click', function() { appWin.minimize(); });
       document.getElementById('btn-maximize').addEventListener('click', function() { appWin.toggleMaximize(); });
-      document.getElementById('btn-close').addEventListener('click', function() { appWin.close(); });
+      document.getElementById('btn-close').addEventListener('click', function() { appWin.hide(); });
 
       appWin.isMaximized().then(function(maximized) {
         toggleMaximizeIcons(maximized);
