@@ -120,6 +120,27 @@ if ($hasGh) {
 }
 Write-Host ""
 
+# 7b. Deploy web version to gh-pages
+Write-Host "=== Deploying web version to gh-pages ===" -ForegroundColor Magenta
+$webDir = Join-Path $env:TEMP "scribble_web_deploy_$version"
+Remove-Item $webDir -Recurse -Force -ErrorAction SilentlyContinue
+
+git -C $scriptRoot fetch origin gh-pages 2>$null
+git -C $scriptRoot branch gh-pages origin/gh-pages 2>$null
+git -C $scriptRoot worktree add $webDir gh-pages 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Get-ChildItem $webDir -Exclude ".git" | Remove-Item -Recurse -Force
+    Copy-Item (Join-Path $scriptRoot "web\*") $webDir -Recurse -Force
+    git -C $webDir add -A
+    git -C $webDir commit -m "Deploy web v$version"
+    git -C $webDir push origin gh-pages
+    git -C $scriptRoot worktree remove $webDir
+    Write-Host "Web version deployed!" -ForegroundColor Green
+} else {
+    Write-Warning "Could not deploy web version (gh-pages worktree failed)"
+}
+Write-Host ""
+
 # 8. Update Firebase
 Write-Host "=== Updating Firebase ===" -ForegroundColor Magenta
 $secret = $env:FIREBASE_SECRET
@@ -149,5 +170,6 @@ Write-Host "  Release v$version complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "  Download page: https://lincolnhay69-ops.github.io/scribble-download/" -ForegroundColor Cyan
+Write-Host "  Web version: https://lincolnhay69-ops.github.io/Skribble/" -ForegroundColor Cyan
 Write-Host "  GitHub Release: https://github.com/lincolnhay69-ops/Skribble/releases/tag/v$version" -ForegroundColor Cyan
 Write-Host ""
