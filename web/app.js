@@ -6,6 +6,12 @@ var currentMsgQuery = null;
 var dmListVersion = 0;
 var ADMIN_UID = 'wVaQg5UcbIS1DavXddSMoMg8etB2';
 var selectedProfileUid = null;
+var isWindowFocused = true;
+
+if (window.__TAURI__) {
+  window.__TAURI__.event.listen('tauri://focus', function() { isWindowFocused = true; });
+  window.__TAURI__.event.listen('tauri://blur', function() { isWindowFocused = false; });
+}
 
 var channelIcons = {
   general: '<svg viewBox="0 0 16 16" width="16" height="16" style="vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5h12A1.5 1.5 0 0115.5 4v7a1.5 1.5 0 01-1.5 1.5H4l-2.5 2V4A1.5 1.5 0 012 2.5z"/></svg>',
@@ -199,7 +205,7 @@ function switchToChannel(channelId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, '#' + channelId);
@@ -265,7 +271,7 @@ function switchToDM(dmId, otherUserId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, msg.senderName);
@@ -817,7 +823,7 @@ function switchToGroup(groupId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, grp.name || 'Group');
