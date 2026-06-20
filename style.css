@@ -1,3 +1,6 @@
+html, body {
+  overflow-x: hidden;
+}
 :root {
   --color-background: #fdfbf7;
   --color-foreground: #2d2d2d;
