@@ -1694,7 +1694,15 @@ function showUpdateBanner(version, url) {
 
   document.getElementById('update-download-btn').addEventListener('click', function() {
     if (window.__TAURI__ && url) {
-      window.__TAURI__.core.invoke('open_url', { url: url });
+      var btn = this;
+      btn.textContent = 'Downloading...';
+      btn.disabled = true;
+      window.__TAURI__.core.invoke('download_installer', { url: url }).then(function(path) {
+        btn.textContent = 'Installing...';
+      }).catch(function(err) {
+        btn.textContent = 'Download Failed';
+        console.error('Download failed:', err);
+      });
     } else if (url) {
       window.open(url, '_blank');
     }

@@ -91,7 +91,8 @@ if ($LASTEXITCODE -eq 0 -and $prevTag) {
     $notes = @("Initial release v$version", "", "- First public release")
 }
 $notesPath = Join-Path $env:TEMP "scribble_release_notes_$version.txt"
-$notes | Out-File -FilePath $notesPath -Encoding utf8
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($notesPath, ($notes -join "`r`n"), $utf8NoBom)
 Write-Host "Release notes written to $notesPath" -ForegroundColor Gray
 Write-Host ""
 
@@ -164,20 +165,38 @@ if ($secret) {
         $notesBody = @{ notes = $notesText } | ConvertTo-Json
         Write-Host "Writing release notes to Firebase..." -ForegroundColor Gray
         $safeVersion = $version -replace '\.', '_'
-        Invoke-RestMethod -Uri "$firebaseUrl/appVersion/releases/$safeVersion.json?auth=$secret" -Method Put -Body $notesBody -ContentType "application/json"
+        $notesUtf8 = [System.Text.Encoding]::UTF8.GetBytes($notesBody)
+        Invoke-RestMethod -Uri "$firebaseUrl/appVersion/releases/$safeVersion.json?auth=$secret" -Method Put -Body $notesUtf8 -ContentType "application/json"
     }
 
-    # Post to announcements channel
+    # Post to announcements channel with changelog
+    $changelogSummary = @()
+    if (Test-Path $notesPath) {
+        $notesLines = Get-Content $notesPath
+        foreach ($line in $notesLines) {
+            if ($line -match '^\s*-\s') {
+                $line = $line -replace '^\s*-\s', ''
+                $changelogSummary += "  - $line"
+            }
+        }
+    }
+    $announceText = "Scribble v$version has been released!"
+    if ($changelogSummary.Count -gt 0) {
+        $announceText += "`n`nChanges:`n" + ($changelogSummary -join "`n")
+    }
+    $announceText += "`n`nDownload the latest version from the update banner."
+
     $announcementMsg = @{
         senderId = "system"
         senderName = "Scribble"
-        text = "🚀 Scribble v$version has been released! Check the What's New modal for details."
+        text = $announceText
         imageURL = $null
         createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     }
-    $announcementJson = $announcementMsg | ConvertTo-Json
+    $announcementJson = $announcementMsg | ConvertTo-Json -Depth 3
+    $announcementUtf8 = [System.Text.Encoding]::UTF8.GetBytes($announcementJson)
     Write-Host "Posting to announcements channel..." -ForegroundColor Gray
-    Invoke-RestMethod -Uri "$firebaseUrl/channels/announcements/messages.json?auth=$secret" -Method Post -Body $announcementJson -ContentType "application/json"
+    Invoke-RestMethod -Uri "$firebaseUrl/channels/announcements/messages.json?auth=$secret" -Method Post -Body $announcementUtf8 -ContentType "application/json"
 
     Write-Host "Firebase updated successfully!" -ForegroundColor Green
 } else {
