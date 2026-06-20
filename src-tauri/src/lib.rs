@@ -38,6 +38,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => {
             if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
                             let _ = window.unminimize();
                             let _ = window.set_skip_taskbar(false);
                             let _ = window.set_focus();

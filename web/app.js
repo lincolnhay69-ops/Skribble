@@ -7,10 +7,62 @@ var dmListVersion = 0;
 var ADMIN_UID = 'wVaQg5UcbIS1DavXddSMoMg8etB2';
 var selectedProfileUid = null;
 var isWindowFocused = true;
+var friendRequestCount = 0;
 
 if (window.__TAURI__) {
-  window.__TAURI__.event.listen('tauri://focus', function() { isWindowFocused = true; });
-  window.__TAURI__.event.listen('tauri://blur', function() { isWindowFocused = false; });
+  window.__TAURI__.event.listen('tauri://focus', function() {
+    isWindowFocused = true;
+    updateOnlineStatus();
+    var dot = document.getElementById('own-status-dot');
+    if (dot) dot.className = 'status-dot online';
+  });
+  window.__TAURI__.event.listen('tauri://blur', function() {
+    isWindowFocused = false;
+    updateOnlineStatus();
+    var dot = document.getElementById('own-status-dot');
+    if (dot) dot.className = 'status-dot away';
+  });
+}
+
+function updateOnlineStatus() {
+  if (!auth.currentUser) return;
+  db.ref('users/' + auth.currentUser.uid + '/status').set({
+    online: true,
+    focus: isWindowFocused,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+function listenForFriendRequests() {
+  var myUid = auth.currentUser.uid;
+  db.ref('friendRequests').orderByChild('to').equalTo(myUid).on('value', function(snapshot) {
+    var prevCount = friendRequestCount;
+    friendRequestCount = 0;
+    var newestRequest = null;
+    snapshot.forEach(function(child) {
+      var req = child.val();
+      if (req.status === 'pending') {
+        friendRequestCount++;
+        if (!newestRequest || (req.createdAt || 0) > (newestRequest.createdAt || 0)) {
+          newestRequest = req;
+        }
+      }
+    });
+    var badge = document.getElementById('friend-request-badge');
+    if (badge) {
+      if (friendRequestCount > 0) {
+        badge.textContent = friendRequestCount > 99 ? '99+' : friendRequestCount;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    if (newestRequest && friendRequestCount > prevCount && !isWindowFocused) {
+      db.ref('users/' + newestRequest.from + '/displayName').once('value', function(nameSnap) {
+        notifyMessage({ senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
+      });
+    }
+  });
 }
 
 var channelIcons = {
@@ -29,10 +81,14 @@ auth.onAuthStateChanged(function(user) {
 
 function initApp() {
   seedChannels();
+  updateOnlineStatus();
 
   var avatarContainer = document.getElementById('user-avatar');
   if (avatarContainer && currentUser.displayName) {
-    avatarContainer.innerHTML = '<span class="avatar avatar-sm avatar-fallback" style="cursor:pointer;" onclick="window.location.href=\'profile.html\'">' + currentUser.displayName.charAt(0).toUpperCase() + '</span>';
+    db.ref('users/' + currentUser.uid + '/avatarColour').once('value', function(snapshot) {
+      var colour = snapshot.val() || '#2d5da1';
+      avatarContainer.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="cursor:pointer;background:' + colour + ';" onclick="window.location.href=\'profile.html\'">' + currentUser.displayName.charAt(0).toUpperCase() + '</span><span class="status-dot ' + (isWindowFocused ? 'online' : 'away') + '" id="own-status-dot"></span></div>';
+    });
   }
 
   loadChannels();
@@ -40,6 +96,7 @@ function initApp() {
   loadGroups();
   reportVersion();
   checkForUpdates();
+  listenForFriendRequests();
   switchToChannel('general');
 }
 
@@ -97,6 +154,12 @@ function loadDMs() {
     var list = document.getElementById('dm-list');
     var version = ++dmListVersion;
     list.innerHTML = '';
+    var dmIds = [];
+    snapshot.forEach(function(child) {
+      dmIds.push(child.key);
+    });
+    // Detach old status listeners
+    document.querySelectorAll('#dm-list .status-dot[data-listener]').forEach(function(el) { el.removeAttribute('data-listener'); });
     var promises = [];
     snapshot.forEach(function(child) {
       var dmId = child.key;
@@ -109,9 +172,22 @@ function loadDMs() {
           var div = document.createElement('div');
           div.className = 'sidebar-item' + (currentDmId === dmId ? ' active' : '');
           var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
-          div.innerHTML = '<span class="avatar avatar-sm avatar-fallback" style="width:28px;height:28px;font-size:0.8rem;flex-shrink:0;">' + initial + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (userData.displayName || 'Unknown') + '</span>';
+          var colour = userData.avatarColour || '#2d5da1';
+          div.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="dot-' + otherId + '"></span></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (userData.displayName || 'Unknown') + '</span>';
           div.dataset.dmId = dmId;
           div.addEventListener('click', function() { switchToDM(dmId, otherId); });
+
+          // Status listener
+          (function(uid) {
+            db.ref('users/' + uid + '/status').on('value', function(snap) {
+              var dot = document.getElementById('dot-' + uid);
+              if (!dot) return;
+              var s = snap.val();
+              if (!s || !s.online) dot.className = 'status-dot offline';
+              else if (s.focus) dot.className = 'status-dot online';
+              else dot.className = 'status-dot away';
+            });
+          })(otherId);
 
           (function(div, key) {
             var lastRead = parseInt(localStorage.getItem('lastRead_' + key)) || 0;
@@ -137,6 +213,25 @@ function loadDMs() {
               del.addEventListener('click', function(e) { e.stopPropagation(); deleteDM(key); });
               div.appendChild(del);
             });
+            // Real-time badge updates for future messages
+            (function(k) {
+              var lr = parseInt(localStorage.getItem('lastRead_' + k)) || 0;
+              db.ref('dms/' + k + '/messages').orderByChild('createdAt').startAt(lr + 1).on('child_added', function(ms) {
+                if (k === currentDmId) return;
+                var m = ms.val();
+                if (!m || m.senderId === auth.currentUser.uid) return;
+                var existingBadge = div.querySelector('.unread-badge');
+                if (existingBadge) {
+                  var cnt = parseInt(existingBadge.textContent) + 1;
+                  existingBadge.textContent = cnt > 99 ? '99+' : cnt;
+                } else {
+                  var badge = document.createElement('span');
+                  badge.className = 'unread-badge';
+                  badge.textContent = '1';
+                  div.appendChild(badge);
+                }
+              });
+            })(key);
           })(div, dmId);
 
           return div;
@@ -523,9 +618,18 @@ function loadAllUsers() {
       else if (status === 'accepted') badgeHtml = '<span class="relationship-badge friend">Friend</span>';
 
       var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
-      div.innerHTML = '<span class="avatar avatar-sm avatar-fallback" style="width:28px;height:28px;font-size:0.8rem;flex-shrink:0;">' + initial + '</span><span>' + (userData.displayName || 'Unknown') + '</span>' + badgeHtml;
+      var colour = userData.avatarColour || '#2d5da1';
+      div.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="sdot-' + child.key + '"></span></div><span>' + (userData.displayName || 'Unknown') + '</span>' + badgeHtml;
       (function(uid) {
         div.addEventListener('click', function() { showUserProfile(uid); });
+        db.ref('users/' + uid + '/status').on('value', function(snap) {
+          var dot = document.getElementById('sdot-' + uid);
+          if (!dot) return;
+          var s = snap.val();
+          if (!s || !s.online) dot.className = 'status-dot offline';
+          else if (s.focus) dot.className = 'status-dot online';
+          else dot.className = 'status-dot away';
+        });
       })(child.key);
       resultsList.appendChild(div);
     });
@@ -1001,6 +1105,16 @@ function showUpdateBanner(version, url) {
     banner.remove();
   });
 }
+
+window.addEventListener('beforeunload', function() {
+  if (auth.currentUser) {
+    db.ref('users/' + auth.currentUser.uid + '/status').set({
+      online: false,
+      focus: false,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    });
+  }
+});
 
 window.addEventListener('resize', function() {
   if (window.innerWidth >= 768) {
