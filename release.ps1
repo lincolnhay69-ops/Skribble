@@ -161,7 +161,7 @@ if ($secret) {
 
     # Write release notes (use underscore-safe key since Firebase paths can't contain dots)
     if (Test-Path $notesPath) {
-        $notesText = Get-Content $notesPath -Raw
+        $notesText = Get-Content -LiteralPath $notesPath -Raw
         $notesBody = @{ notes = $notesText } | ConvertTo-Json
         Write-Host "Writing release notes to Firebase..." -ForegroundColor Gray
         $safeVersion = $version -replace '\.', '_'
