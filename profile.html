@@ -157,11 +157,59 @@
             });
             completed++;
             if (completed === channelCount) {
-              document.getElementById('msg-count').textContent = totalCount;
+              // Count DMs too
+              db.ref('dms').once('value').then(function(dmSnap) {
+                var dmDone = 0;
+                var dmCount = 0;
+                dmSnap.forEach(function() { dmCount++; });
+                if (dmCount === 0) {
+                  // Count groups too
+                  countGroupMessages(user.uid, totalCount);
+                  return;
+                }
+                dmSnap.forEach(function(dmChild) {
+                  db.ref('dms/' + dmChild.key + '/messages').once('value').then(function(msgSnapshot) {
+                    msgSnapshot.forEach(function(msgChild) {
+                      if (msgChild.val().senderId === user.uid) totalCount++;
+                    });
+                    dmDone++;
+                    if (dmDone === dmCount) {
+                      countGroupMessages(user.uid, totalCount);
+                    }
+                  });
+                });
+              }).catch(function() {
+                countGroupMessages(user.uid, totalCount);
+              });
             }
           });
         });
       });
+
+      function countGroupMessages(uid, currentCount) {
+        db.ref('groups').once('value').then(function(grpSnap) {
+          var grpDone = 0;
+          var grpCount = 0;
+          grpSnap.forEach(function() { grpCount++; });
+          if (grpCount === 0) {
+            document.getElementById('msg-count').textContent = currentCount;
+            return;
+          }
+          grpSnap.forEach(function(grpChild) {
+            db.ref('groups/' + grpChild.key + '/messages').once('value').then(function(msgSnapshot) {
+              msgSnapshot.forEach(function(msgChild) {
+                if (msgChild.val().senderId === uid) currentCount++;
+              });
+              grpDone++;
+              if (grpDone === grpCount) {
+                document.getElementById('msg-count').textContent = currentCount;
+              }
+            });
+          });
+        }).catch(function() {
+          document.getElementById('msg-count').textContent = currentCount;
+        });
+      }
 
       db.ref('users/' + user.uid + '/followers').once('value').then(function(snapshot) {
         var count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
