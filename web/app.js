@@ -420,12 +420,32 @@ function handleImageUpload(event) {
   event.target.value = '';
 }
 
+var _notifGranted = null;
+function ensureNotifPermission() {
+  if (_notifGranted !== null) return Promise.resolve(_notifGranted);
+  return window.__TAURI__.core.invoke('plugin:notification|is_permission_granted').then(function(granted) {
+    if (granted) { _notifGranted = true; return true; }
+    return window.__TAURI__.core.invoke('plugin:notification|request_permission').then(function(result) {
+      _notifGranted = (result === 'granted');
+      console.log('Notification permission requested, result:', result);
+      return _notifGranted;
+    });
+  }).catch(function(e) {
+    console.error('Permission check failed:', e);
+    return false;
+  });
+}
+
 function notifyMessage(msg, source) {
   if (!window.__TAURI__) return;
-  var title = "Scribble - " + source;
-  var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
-  window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
-    console.error('Notification failed:', e);
+  ensureNotifPermission().then(function(granted) {
+    if (!granted) { console.log('Notif skipped: permission not granted'); return; }
+    var title = "Scribble - " + source;
+    var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
+    console.log('Sending notification:', title, body);
+    window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
+      console.error('Notification failed:', e);
+    });
   });
 }
 
