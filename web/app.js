@@ -1632,7 +1632,8 @@ function showReleaseNotes() {
       if (!data || !data.latest) return;
       if (data.latest === localStorage.getItem('seenVersion')) return;
       if (!isNewerVersion(myVersion, data.latest)) return;
-      db.ref('appVersion/releases/' + data.latest + '/notes').once('value').then(function(notesSnap) {
+      var safeKey = data.latest.replace(/\./g, '_');
+      db.ref('appVersion/releases/' + safeKey + '/notes').once('value').then(function(notesSnap) {
         var notes = notesSnap.val();
         if (!notes) return;
         document.getElementById('release-notes-version').textContent = 'v' + data.latest;

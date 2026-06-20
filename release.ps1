@@ -158,12 +158,13 @@ if ($secret) {
     Write-Host "Writing to Firebase: latest=$version, downloadUrl=$downloadUrl" -ForegroundColor Gray
     Invoke-RestMethod -Uri "$firebaseUrl/appVersion.json?auth=$secret" -Method Put -Body $json -ContentType "application/json"
 
-    # Write release notes
+    # Write release notes (use underscore-safe key since Firebase paths can't contain dots)
     if (Test-Path $notesPath) {
         $notesText = Get-Content $notesPath -Raw
         $notesBody = @{ notes = $notesText } | ConvertTo-Json
         Write-Host "Writing release notes to Firebase..." -ForegroundColor Gray
-        Invoke-RestMethod -Uri "$firebaseUrl/appVersion/releases/$version.json?auth=$secret" -Method Put -Body $notesBody -ContentType "application/json"
+        $safeVersion = $version -replace '\.', '_'
+        Invoke-RestMethod -Uri "$firebaseUrl/appVersion/releases/$safeVersion.json?auth=$secret" -Method Put -Body $notesBody -ContentType "application/json"
     }
 
     # Post to announcements channel
