@@ -95,6 +95,14 @@ function initApp() {
   loadDMs();
   loadGroups();
   reportVersion();
+  if (window.__TAURI__) {
+    window.__TAURI__.core.listen('before-quit', function() {
+      db.ref('users/' + auth.currentUser.uid + '/status').set({ online: false }).then(function() {
+        window.__TAURI__.core.invoke('quit_app');
+      });
+    });
+  }
+  setupNotificationListeners();
   checkForUpdates();
   listenForFriendRequests();
   switchToChannel('general');
@@ -189,7 +197,7 @@ function loadDMs() {
             });
           })(otherId);
 
-          (function(div, key) {
+          (function(div, key, otherName) {
             var lastRead = parseInt(localStorage.getItem('lastRead_' + key)) || 0;
             if (lastRead === 0) {
               var del = document.createElement('button');
@@ -214,7 +222,7 @@ function loadDMs() {
               div.appendChild(del);
             });
             // Real-time badge updates for future messages
-            (function(k) {
+            (function(k, n) {
               var lr = parseInt(localStorage.getItem('lastRead_' + k)) || 0;
               db.ref('dms/' + k + '/messages').orderByChild('createdAt').startAt(lr + 1).on('child_added', function(ms) {
                 if (k === currentDmId) return;
@@ -230,9 +238,12 @@ function loadDMs() {
                   badge.textContent = '1';
                   div.appendChild(badge);
                 }
+                if (!isWindowFocused) {
+                  notifyMessage(m, n);
+                }
               });
-            })(key);
-          })(div, dmId);
+            })(key, otherName);
+          })(div, dmId, userData.displayName || 'Unknown');
 
           return div;
         })
@@ -894,6 +905,42 @@ function loadGroups() {
       div.dataset.groupId = child.key;
       div.addEventListener('click', function() { switchToGroup(child.key); });
       list.appendChild(div);
+    });
+  });
+}
+
+function setupNotificationListeners() {
+  var uid = auth.currentUser.uid;
+  db.ref('channels').once('value', function(snapshot) {
+    snapshot.forEach(function(child) {
+      var channelId = child.key;
+      var channelName = child.val().name;
+      var lastRead = parseInt(localStorage.getItem('lastRead_' + channelId)) || 0;
+      if (lastRead === 0) return;
+      db.ref('channels/' + channelId + '/messages').orderByChild('createdAt').startAt(lastRead + 1).on('child_added', function(msgSnap) {
+        if (channelId === currentChannelId) return;
+        var msg = msgSnap.val();
+        if (!msg || msg.senderId === uid) return;
+        if (!isWindowFocused) {
+          notifyMessage(msg, '# ' + channelName);
+        }
+      });
+    });
+  });
+  db.ref('groups').orderByChild('members/' + uid).equalTo(true).once('value', function(snapshot) {
+    snapshot.forEach(function(child) {
+      var groupId = child.key;
+      var groupName = child.val().name;
+      var lastRead = parseInt(localStorage.getItem('lastRead_' + groupId)) || 0;
+      if (lastRead === 0) return;
+      db.ref('groups/' + groupId + '/messages').orderByChild('createdAt').startAt(lastRead + 1).on('child_added', function(msgSnap) {
+        if (groupId === currentGroupId) return;
+        var msg = msgSnap.val();
+        if (!msg || msg.senderId === uid) return;
+        if (!isWindowFocused) {
+          notifyMessage(msg, groupName);
+        }
+      });
     });
   });
 }
