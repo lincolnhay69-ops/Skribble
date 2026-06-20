@@ -26,9 +26,27 @@ async fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+#[tauri::command]
+async fn show_window(app: tauri::AppHandle) -> Result<(), String> {
+    focus_window(&app);
+    Ok(())
+}
+
+fn focus_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_skip_taskbar(false);
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_window(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let open_item = MenuItemBuilder::with_id("open", "Show Scribble").build(app)?;
@@ -43,12 +61,7 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => {
-            if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_skip_taskbar(false);
-                            let _ = window.set_focus();
-                        }
+                        focus_window(app);
                     }
                     "quit" => {
                         let _ = app.emit("before-quit", ());
@@ -77,7 +90,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![notify, open_url, quit_app])
+        .invoke_handler(tauri::generate_handler![notify, open_url, quit_app, show_window])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

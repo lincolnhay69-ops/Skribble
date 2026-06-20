@@ -3,6 +3,7 @@ var currentChannelId = null;
 var currentDmId = null;
 var currentGroupId = null;
 var currentMsgQuery = null;
+var currentTypingRef = null;
 var dmListVersion = 0;
 var ADMIN_UID = 'wVaQg5UcbIS1DavXddSMoMg8etB2';
 var selectedProfileUid = null;
@@ -96,16 +97,34 @@ function initApp() {
   loadGroups();
   reportVersion();
   if (window.__TAURI__) {
-    window.__TAURI__.core.listen('before-quit', function() {
+    window.__TAURI__.event.listen('before-quit', function() {
       db.ref('users/' + auth.currentUser.uid + '/status').set({ online: false }).then(function() {
         window.__TAURI__.core.invoke('quit_app');
       });
+    });
+    window.__TAURI__.event.listen('notification', function() {
+      window.__TAURI__.core.invoke('show_window');
     });
   }
   setupNotificationListeners();
   checkForUpdates();
   listenForFriendRequests();
   switchToChannel('general');
+
+  var typingTimeout = null;
+  document.getElementById('message-input').addEventListener('input', function() {
+    var uid = auth.currentUser.uid;
+    var path = currentChannelId ? 'channels/' + currentChannelId + '/typing/' + uid
+             : currentDmId ? 'dms/' + currentDmId + '/typing/' + uid
+             : currentGroupId ? 'groups/' + currentGroupId + '/typing/' + uid
+             : null;
+    if (!path) return;
+    db.ref(path).set(firebase.database.ServerValue.TIMESTAMP);
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(function() {
+      db.ref(path).remove();
+    }, 2000);
+  });
 }
 
 function seedChannels() {
@@ -198,29 +217,11 @@ function loadDMs() {
           })(otherId);
 
           (function(div, key, otherName) {
-            var lastRead = parseInt(localStorage.getItem('lastRead_' + key)) || 0;
-            if (lastRead === 0) {
-              var del = document.createElement('button');
-              del.className = 'dm-delete-btn';
-              del.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h2a.5.5 0 01.5.5V4"/><path d="M12 4v9a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 013 13V4"/></svg>';
-              del.addEventListener('click', function(e) { e.stopPropagation(); deleteDM(key); });
-              div.appendChild(del);
-              return;
-            }
-            db.ref('dms/' + key + '/messages').orderByChild('createdAt').startAt(lastRead + 1).once('value', function(msgSnapshot) {
-              var count = msgSnapshot.numChildren();
-              if (count > 0) {
-                var badge = document.createElement('span');
-                badge.className = 'unread-badge';
-                badge.textContent = count > 99 ? '99+' : count;
-                div.appendChild(badge);
-              }
-              var del = document.createElement('button');
-              del.className = 'dm-delete-btn';
-              del.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h2a.5.5 0 01.5.5V4"/><path d="M12 4v9a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 013 13V4"/></svg>';
-              del.addEventListener('click', function(e) { e.stopPropagation(); deleteDM(key); });
-              div.appendChild(del);
-            });
+            var del = document.createElement('button');
+            del.className = 'dm-delete-btn';
+            del.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h2a.5.5 0 01.5.5V4"/><path d="M12 4v9a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 013 13V4"/></svg>';
+            del.addEventListener('click', function(e) { e.stopPropagation(); deleteDM(key); });
+            div.appendChild(del);
             // Real-time badge updates for future messages
             (function(k, n) {
               var lr = parseInt(localStorage.getItem('lastRead_' + k)) || 0;
@@ -265,6 +266,9 @@ function switchToChannel(channelId) {
 
   localStorage.setItem('lastRead_' + channelId, Date.now());
   updateSidebarActive();
+  var badgeEl = document.querySelector('#channel-list .sidebar-item[data-channel-id="' + channelId + '"] .unread-badge');
+  if (badgeEl) badgeEl.remove();
+  startTypingListener('channels/' + channelId);
 
   db.ref('channels/' + channelId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
@@ -337,6 +341,9 @@ function switchToDM(dmId, otherUserId) {
 
   localStorage.setItem('lastRead_' + dmId, Date.now());
   updateSidebarActive();
+  var badgeEl = document.querySelector('#dm-list .sidebar-item[data-dm-id="' + dmId + '"] .unread-badge');
+  if (badgeEl) badgeEl.remove();
+  startTypingListener('dms/' + dmId);
 
   db.ref('users/' + otherUserId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
@@ -487,6 +494,11 @@ function sendMessage() {
   }
 
   input.value = '';
+  var uid = auth.currentUser.uid;
+  var typingPath = currentChannelId ? 'channels/' + currentChannelId + '/typing/' + uid
+                 : currentDmId ? 'dms/' + currentDmId + '/typing/' + uid
+                 : 'groups/' + currentGroupId + '/typing/' + uid;
+  db.ref(typingPath).remove();
   input.focus();
 }
 
@@ -911,13 +923,18 @@ function loadGroups() {
 
 function setupNotificationListeners() {
   var uid = auth.currentUser.uid;
-  db.ref('channels').once('value', function(snapshot) {
+  var attachedChannels = {};
+  var attachedGroups = {};
+
+  db.ref('channels').on('value', function(snapshot) {
     snapshot.forEach(function(child) {
       var channelId = child.key;
+      if (attachedChannels[channelId]) return;
+      attachedChannels[channelId] = true;
       var channelName = child.val().name;
       var lastRead = parseInt(localStorage.getItem('lastRead_' + channelId)) || 0;
-      if (lastRead === 0) return;
-      db.ref('channels/' + channelId + '/messages').orderByChild('createdAt').startAt(lastRead + 1).on('child_added', function(msgSnap) {
+      var startTime = lastRead > 0 ? lastRead + 1 : Date.now();
+      db.ref('channels/' + channelId + '/messages').orderByChild('createdAt').startAt(startTime).on('child_added', function(msgSnap) {
         if (channelId === currentChannelId) return;
         var msg = msgSnap.val();
         if (!msg || msg.senderId === uid) return;
@@ -927,13 +944,16 @@ function setupNotificationListeners() {
       });
     });
   });
-  db.ref('groups').orderByChild('members/' + uid).equalTo(true).once('value', function(snapshot) {
+
+  db.ref('groups').orderByChild('members/' + uid).equalTo(true).on('value', function(snapshot) {
     snapshot.forEach(function(child) {
       var groupId = child.key;
+      if (attachedGroups[groupId]) return;
+      attachedGroups[groupId] = true;
       var groupName = child.val().name;
       var lastRead = parseInt(localStorage.getItem('lastRead_' + groupId)) || 0;
-      if (lastRead === 0) return;
-      db.ref('groups/' + groupId + '/messages').orderByChild('createdAt').startAt(lastRead + 1).on('child_added', function(msgSnap) {
+      var startTime = lastRead > 0 ? lastRead + 1 : Date.now();
+      db.ref('groups/' + groupId + '/messages').orderByChild('createdAt').startAt(startTime).on('child_added', function(msgSnap) {
         if (groupId === currentGroupId) return;
         var msg = msgSnap.val();
         if (!msg || msg.senderId === uid) return;
@@ -954,10 +974,14 @@ function switchToGroup(groupId) {
 
   localStorage.setItem('lastRead_' + groupId, Date.now());
   updateSidebarActive();
+  var badgeEl = document.querySelector('#group-list .sidebar-item[data-group-id="' + groupId + '"] .unread-badge');
+  if (badgeEl) badgeEl.remove();
+  startTypingListener('groups/' + groupId);
 
   db.ref('groups/' + groupId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
-      document.getElementById('current-channel-name').innerHTML = groupIcon + ' ' + snapshot.val().name;
+      var code = snapshot.val().joinCode;
+      document.getElementById('current-channel-name').innerHTML = groupIcon + ' ' + snapshot.val().name + (code ? ' <span style="font-size:0.8rem;opacity:0.6;margin-left:8px;">Code: ' + code + '</span>' : '');
     }
   });
 
@@ -1090,6 +1114,123 @@ function showJoinGroupModal() {
 
 function hideJoinGroupModal() {
   document.getElementById('join-group-modal').style.display = 'none';
+}
+
+// ===== TYPING INDICATOR =====
+
+function startTypingListener(basePath) {
+  var indicator = document.getElementById('typing-indicator');
+  if (currentTypingRef) {
+    currentTypingRef.off();
+    currentTypingRef = null;
+  }
+  indicator.style.display = 'none';
+  indicator.textContent = '';
+  currentTypingRef = db.ref(basePath + '/typing');
+  currentTypingRef.on('value', function(snapshot) {
+    var uid = auth.currentUser.uid;
+    var names = [];
+    var now = Date.now();
+    snapshot.forEach(function(child) {
+      if (child.key === uid) return;
+      var ts = child.val();
+      if (!ts || now - ts > 3000) return;
+      names.push(child.key);
+    });
+    if (names.length === 0) {
+      indicator.style.display = 'none';
+      indicator.textContent = '';
+      return;
+    }
+    // Resolve names
+    var resolved = [];
+    var pending = names.map(function(id) {
+      return db.ref('users/' + id + '/displayName').once('value').then(function(snap) {
+        resolved.push(snap.val() || 'Someone');
+      });
+    });
+    Promise.all(pending).then(function() {
+      if (resolved.length === 0) { indicator.style.display = 'none'; return; }
+      var text = resolved.join(', ') + (resolved.length === 1 ? ' is' : ' are') + ' typing...';
+      indicator.textContent = text;
+      indicator.style.display = 'block';
+    });
+  });
+}
+
+// ===== CHAT STATS =====
+
+function showChatStats() {
+  var modal = document.getElementById('chat-stats-modal');
+  var title = document.getElementById('stats-title');
+  var created = document.getElementById('stats-created');
+  var body = document.getElementById('stats-body');
+
+  var convPath, convName;
+  if (currentChannelId) {
+    convPath = 'channels/' + currentChannelId;
+    convName = '#' + currentChannelId;
+  } else if (currentDmId) {
+    convPath = 'dms/' + currentDmId;
+    convName = 'DM';
+  } else if (currentGroupId) {
+    convPath = 'groups/' + currentGroupId;
+    convName = document.querySelector('#group-list .sidebar-item.active span')?.textContent || 'Group';
+  } else {
+    return;
+  }
+
+  title.textContent = convName;
+  created.textContent = 'Loading...';
+  body.innerHTML = '';
+
+  db.ref(convPath).once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+    if (data.createdAt) {
+      var d = new Date(data.createdAt);
+      var days = Math.floor((Date.now() - data.createdAt) / 86400000);
+      created.textContent = 'Created ' + d.toDateString() + ' (' + days + ' day' + (days === 1 ? '' : 's') + ' ago)';
+    } else {
+      created.textContent = '';
+    }
+  });
+
+  db.ref(convPath + '/messages').once('value').then(function(snap) {
+    var counts = {};
+    var total = 0;
+    snap.forEach(function(child) {
+      var msg = child.val();
+      if (msg && msg.senderId) {
+        counts[msg.senderId] = (counts[msg.senderId] || 0) + 1;
+        total++;
+      }
+    });
+    var members = Object.keys(counts).length;
+    var html = '<p><strong>' + members + ' member' + (members === 1 ? '' : 's') + '</strong> &middot; ' + total + ' message' + (total === 1 ? '' : 's') + '</p>';
+    var uidOrder = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; });
+    var pendingNames = uidOrder.map(function(id) {
+      return db.ref('users/' + id + '/displayName').once('value').then(function(snap) {
+        return { id: id, name: snap.val() || 'Unknown', count: counts[id] };
+      });
+    });
+    Promise.all(pendingNames).then(function(users) {
+      html += '<table style="width:100%;border-collapse:collapse;">';
+      html += '<tr style="border-bottom:1px solid var(--color-border);"><th style="text-align:left;padding:4px;">User</th><th style="text-align:right;padding:4px;">Messages</th></tr>';
+      users.forEach(function(u) {
+        var pct = ((u.count / total) * 100).toFixed(1);
+        html += '<tr><td style="padding:4px;">' + u.name + '</td><td style="text-align:right;padding:4px;">' + u.count + ' (' + pct + '%)</td></tr>';
+      });
+      html += '</table>';
+      body.innerHTML = html;
+    });
+  });
+
+  modal.style.display = 'flex';
+}
+
+function hideChatStats() {
+  document.getElementById('chat-stats-modal').style.display = 'none';
 }
 
 // ===== VERSION REPORTING & UPDATE BANNER =====

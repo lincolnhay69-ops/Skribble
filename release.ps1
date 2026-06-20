@@ -57,7 +57,7 @@ if (-not $exe) {
 Write-Host ""
 
 # 4. Collect artifacts and generate download URL
-$msi = Get-ChildItem (Join-Path $msiDir "*.msi") | Select-Object -First 1
+$msi = Get-ChildItem (Join-Path $msiDir "*.msi") | Where-Object { $_.Name -like "*$version*" } | Select-Object -First 1
 
 if (-not $exe) {
     throw "No .exe found in $nsisDir"
