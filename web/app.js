@@ -333,6 +333,7 @@ function switchToChannel(channelId) {
     var messages = [];
     snapshot.forEach(function(child) {
       var msg = child.val();
+      msg._key = child.key;
       messages.push(msg);
       if (msg.createdAt && msg.createdAt > lastKnownTime) {
         newMsgs.push(msg);
@@ -409,6 +410,7 @@ function switchToDM(dmId, otherUserId) {
     var messages = [];
     snapshot.forEach(function(child) {
       var msg = child.val();
+      msg._key = child.key;
       messages.push(msg);
       if (msg.createdAt && msg.createdAt > lastKnownTime) {
         newMsgs.push(msg);
@@ -460,50 +462,209 @@ function updateSidebarActive() {
 
 function appendMessage(msg, container) {
   var isMine = msg.senderId === currentUser.uid;
+  var row = document.createElement('div');
+  row.className = 'message-row' + (isMine ? ' mine' : ' other');
+  row.dataset.msgKey = msg._key || '';
+  row.dataset.senderId = msg.senderId || '';
+  row.dataset.senderName = msg.senderName || '';
+
+  var content = document.createElement('div');
+  content.className = 'msg-content';
 
   if (msg.text) {
-    var div = document.createElement('div');
-    div.className = isMine ? 'message-mine' : 'message-other';
+    var bubble = document.createElement('div');
+    bubble.className = isMine ? 'msg-bubble msg-bubble-mine' : 'msg-bubble msg-bubble-other';
 
     if (!isMine && (currentChannelId || currentGroupId)) {
       var name = document.createElement('div');
-      name.style.fontSize = '0.75rem';
-      name.style.fontWeight = '700';
-      name.style.marginBottom = '4px';
+      name.className = 'msg-sender-name';
       name.textContent = msg.senderName;
-      div.appendChild(name);
+      bubble.appendChild(name);
     }
 
-    var text = document.createElement('span');
-    text.textContent = msg.text;
-    div.appendChild(text);
-    container.appendChild(div);
+    var textEl = document.createElement('span');
+    textEl.textContent = msg.text;
+    bubble.appendChild(textEl);
+    content.appendChild(bubble);
   }
 
   if (msg.imageURL || msg.imageData) {
-    var wrapper = document.createElement('div');
-    wrapper.className = 'message-image tape';
-    wrapper.style.marginLeft = isMine ? 'auto' : '0';
-    wrapper.style.marginRight = isMine ? '0' : 'auto';
-
     if (!isMine && (currentChannelId || currentGroupId)) {
       var name = document.createElement('div');
-      name.style.fontSize = '0.7rem';
-      name.style.fontWeight = '700';
-      name.style.padding = '4px 8px';
-      name.style.borderBottom = '1px dashed var(--color-border)';
+      name.className = 'msg-sender-name';
       name.textContent = msg.senderName;
-      wrapper.appendChild(name);
+      content.appendChild(name);
     }
-
+    var wrapper = document.createElement('div');
+    wrapper.className = 'message-image tape';
     var img = document.createElement('img');
     img.src = msg.imageData || msg.imageURL;
     img.alt = 'Shared image';
-    img.style.width = '100%';
-    img.style.display = 'block';
+    img.draggable = false;
+    img.addEventListener('click', function() { openImageViewer(this.src); });
     wrapper.appendChild(img);
-    container.appendChild(wrapper);
+    content.appendChild(wrapper);
   }
+
+  if (isMine) {
+    row.appendChild(content);
+    row.appendChild(createMsgActions(msg, row));
+  } else {
+    row.appendChild(createMsgActions(msg, row));
+    row.appendChild(content);
+  }
+  container.appendChild(row);
+}
+
+function createMsgActions(msg, row) {
+  var div = document.createElement('div');
+  div.className = 'msg-actions';
+
+  if (msg.senderId === currentUser.uid) {
+    // Edit (text only)
+    if (msg.text) {
+      var editBtn = document.createElement('button');
+      editBtn.className = 'msg-action-btn';
+      editBtn.innerHTML = '&#9998;';
+      editBtn.title = 'Edit';
+      editBtn.addEventListener('click', function(e) { e.stopPropagation(); editMessage(msg, row); });
+      div.appendChild(editBtn);
+    }
+    // Delete
+    var delBtn = document.createElement('button');
+    delBtn.className = 'msg-action-btn';
+    delBtn.innerHTML = '&#128465;';
+    delBtn.title = 'Delete';
+    delBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteMessage(msg); });
+    div.appendChild(delBtn);
+  } else {
+    // Reply for other messages
+    var replyBtn = document.createElement('button');
+    replyBtn.className = 'msg-action-btn';
+    replyBtn.innerHTML = '&#8617;';
+    replyBtn.title = 'Reply';
+    replyBtn.addEventListener('click', function(e) { e.stopPropagation(); replyToMessage(msg); });
+    div.appendChild(replyBtn);
+    // Copy for other messages
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-action-btn';
+    copyBtn.innerHTML = '&#128203;';
+    copyBtn.title = 'Copy';
+    copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyMessage(msg, false); });
+    div.appendChild(copyBtn);
+    return div;
+  }
+
+  // Common actions for own messages
+  var replyBtn = document.createElement('button');
+  replyBtn.className = 'msg-action-btn';
+  replyBtn.innerHTML = '&#8617;';
+  replyBtn.title = 'Reply';
+  replyBtn.addEventListener('click', function(e) { e.stopPropagation(); replyToMessage(msg); });
+  div.appendChild(replyBtn);
+
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'msg-action-btn';
+  copyBtn.innerHTML = '&#128203;';
+  copyBtn.title = 'Copy';
+  copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyMessage(msg, true); });
+  div.appendChild(copyBtn);
+
+  return div;
+}
+
+function editMessage(msg, row) {
+  var bubble = row.querySelector('.msg-bubble');
+  if (!bubble) return;
+  var oldText = msg.text || '';
+  bubble.innerHTML = '';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'input';
+  input.value = oldText;
+  input.style.width = '100%';
+  input.style.boxSizing = 'border-box';
+  bubble.appendChild(input);
+  input.focus();
+  input.select();
+
+  function saveEdit() {
+    var newText = input.value.trim();
+    if (!newText || newText === oldText) { cancelEdit(); return; }
+    var path = getMsgPath(msg._key);
+    if (!path) { cancelEdit(); return; }
+    getConvPathAsync().then(function(convPath) {
+      encryptMessage(newText, convPath).then(function(encrypted) {
+        var updates = {};
+        updates.text = null;
+        updates.imageURL = null;
+        updates.imageData = null;
+        updates.ciphertext = encrypted.ciphertext;
+        updates.iv = encrypted.iv;
+        updates.editedAt = firebase.database.ServerValue.TIMESTAMP;
+        db.ref(path).update(updates);
+      });
+    });
+  }
+
+  function cancelEdit() {
+    bubble.innerHTML = '';
+    var span = document.createElement('span');
+    span.textContent = oldText;
+    bubble.appendChild(span);
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') saveEdit();
+    if (e.key === 'Escape') cancelEdit();
+  });
+  input.addEventListener('blur', function() {
+    setTimeout(function() { if (!bubble.contains(document.activeElement)) cancelEdit(); }, 200);
+  });
+}
+
+function deleteMessage(msg) {
+  if (!confirm('Delete this message?')) return;
+  var path = getMsgPath(msg._key);
+  if (!path) return;
+  db.ref(path).remove();
+}
+
+function replyToMessage(msg) {
+  var input = document.getElementById('message-input');
+  if (!input) return;
+  var prefix = '@' + (msg.senderName || 'Unknown') + ': ' + (msg.text || '');
+  input.value = prefix + (input.value ? ' ' + input.value : '');
+  input.focus();
+}
+
+function copyMessage(msg, isOwn) {
+  var text;
+  if (isOwn) {
+    text = msg.text || '';
+  } else {
+    text = (msg.senderName || 'Unknown') + ': ' + (msg.text || '');
+  }
+  if (!text) {
+    showToast('Nothing to copy');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied');
+  }).catch(function() {
+    showToast('Failed to copy');
+  });
+}
+
+function getMsgPath(msgKey) {
+  if (currentChannelId) return 'channels/' + currentChannelId + '/messages/' + msgKey;
+  if (currentDmId) return 'dms/' + currentDmId + '/messages/' + msgKey;
+  if (currentGroupId) return 'groups/' + currentGroupId + '/messages/' + msgKey;
+  return null;
+}
+
+function getConvPathAsync() {
+  return Promise.resolve(getConvPath());
 }
 
 function getConvPath() {
@@ -1258,6 +1419,17 @@ function loadGroups() {
       div.innerHTML = groupIcon + ' <span>' + grp.name + '</span>';
       div.dataset.groupId = child.key;
       div.addEventListener('click', function() { switchToGroup(child.key); });
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'dm-delete-btn';
+      delBtn.innerHTML = '&#128465;';
+      delBtn.title = grp.creator === myUid ? 'Delete Group' : 'Leave Group';
+      delBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        showDeleteGroupModal(child.key, grp.creator === myUid);
+      });
+      div.appendChild(delBtn);
+
       list.appendChild(div);
     });
   });
@@ -1367,6 +1539,7 @@ function switchToGroup(groupId) {
     var messages = [];
     snapshot.forEach(function(child) {
       var msg = child.val();
+      msg._key = child.key;
       messages.push(msg);
       if (msg.createdAt && msg.createdAt > lastKnownTime) {
         newMsgs.push(msg);
@@ -1597,6 +1770,126 @@ function hideChatStats() {
   document.getElementById('chat-stats-modal').style.display = 'none';
 }
 
+// ===== IMAGE VIEWER =====
+
+var _ivZoom = 1;
+function openImageViewer(src) {
+  var img = document.getElementById('iv-image');
+  img.src = src;
+  _ivZoom = 1;
+  img.style.transform = 'scale(1)';
+  document.getElementById('iv-zoom-pct').textContent = '100%';
+  document.getElementById('image-viewer-modal').style.display = 'flex';
+}
+
+function closeImageViewer() {
+  document.getElementById('image-viewer-modal').style.display = 'none';
+  document.getElementById('iv-image').src = '';
+}
+
+function zoomImageViewer(delta) {
+  _ivZoom = Math.max(0.1, Math.min(10, _ivZoom + delta));
+  document.getElementById('iv-image').style.transform = 'scale(' + _ivZoom + ')';
+  document.getElementById('iv-zoom-pct').textContent = Math.round(_ivZoom * 100) + '%';
+}
+
+function ivZoomWheel(e) {
+  e.preventDefault();
+  var d = e.deltaY > 0 ? -0.1 : 0.1;
+  zoomImageViewer(d);
+}
+
+function fitImageViewer() {
+  _ivZoom = 1;
+  document.getElementById('iv-image').style.transform = 'scale(1)';
+  document.getElementById('iv-zoom-pct').textContent = '100%';
+}
+
+function downloadImageViewer() {
+  var src = document.getElementById('iv-image').src;
+  if (!src) return;
+  var a = document.createElement('a');
+  a.href = src;
+  a.download = 'scribble-image.jpg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ===== GROUP DELETE / LEAVE =====
+
+var _deleteGroupId = null;
+var _deleteGroupIsCreator = false;
+
+function showDeleteGroupModal(groupId, isCreator) {
+  _deleteGroupId = groupId;
+  _deleteGroupIsCreator = isCreator;
+  var modal = document.getElementById('delete-group-modal');
+  var title = document.getElementById('delete-group-title');
+  var desc = document.getElementById('delete-group-desc');
+  var btn = document.getElementById('confirm-delete-group-btn');
+
+  if (isCreator) {
+    title.textContent = 'Delete Group';
+    desc.textContent = 'This will permanently delete the group for all members. This cannot be undone.';
+    btn.textContent = 'Delete Group';
+    btn.className = 'btn btn-danger';
+  } else {
+    title.textContent = 'Leave Group';
+    desc.textContent = 'Are you sure you want to leave this group?';
+    btn.textContent = 'Leave Group';
+    btn.className = 'btn btn-danger';
+  }
+
+  var newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', function() {
+    modal.style.display = 'none';
+    if (isCreator) {
+      deleteGroup(groupId);
+    } else {
+      leaveGroup(groupId);
+    }
+  });
+
+  modal.style.display = 'flex';
+}
+
+function deleteGroup(groupId) {
+  var myUid = auth.currentUser.uid;
+  db.ref('groups/' + groupId + '/members').once('value').then(function(snap) {
+    var members = snap.val();
+    var updates = {};
+    updates['groups/' + groupId] = null;
+    if (members) {
+      Object.keys(members).forEach(function(uid) {
+        updates['userGroups/' + uid + '/' + groupId] = null;
+      });
+    }
+    return db.ref().update(updates);
+  }).then(function() {
+    if (currentGroupId === groupId) {
+      currentGroupId = null;
+      switchToChannel('general');
+    }
+    showToast('Group deleted');
+  });
+}
+
+function leaveGroup(groupId) {
+  var myUid = auth.currentUser.uid;
+  var updates = {};
+  updates['groups/' + groupId + '/members/' + myUid] = null;
+  updates['userGroups/' + myUid + '/' + groupId] = null;
+  db.ref().update(updates).then(function() {
+    if (currentGroupId === groupId) {
+      currentGroupId = null;
+      switchToChannel('general');
+    }
+    showToast('Left group');
+  });
+}
+
 // ===== VERSION REPORTING & UPDATE BANNER =====
 
 function reportVersion() {
@@ -1629,13 +1922,43 @@ function showReleaseNotes() {
       if (!data || !data.latest) return;
       if (data.latest === localStorage.getItem('seenVersion')) return;
       if (!isNewerVersion(myVersion, data.latest)) return;
-      var safeKey = data.latest.replace(/\./g, '_');
-      db.ref('appVersion/releases/' + safeKey + '/notes').once('value').then(function(notesSnap) {
-        var notes = notesSnap.val();
-        if (!notes) return;
-        document.getElementById('release-notes-version').textContent = 'v' + data.latest;
-        document.getElementById('release-notes-body').textContent = notes;
-        document.getElementById('release-notes-modal').style.display = 'flex';
+
+      // Collect notes from all versions newer than current
+      var releases = data.releases;
+      if (!releases) return;
+      var versionList = Object.keys(releases).map(function(k) { return k.replace(/_/g, '.'); });
+      var newerVersions = versionList.filter(function(v) { return isNewerVersion(myVersion, v); });
+      newerVersions.sort(function(a, b) {
+        var aa = a.split('.').map(Number);
+        var bb = b.split('.').map(Number);
+        for (var i = 0; i < 3; i++) {
+          if (aa[i] !== bb[i]) return aa[i] - bb[i];
+        }
+        return 0;
+      });
+
+      if (newerVersions.length === 0) return;
+
+      var allNotes = '';
+      var count = 0;
+      var remaining = newerVersions.length;
+
+      newerVersions.forEach(function(v) {
+        var safeKey = v.replace(/\./g, '_');
+        db.ref('appVersion/releases/' + safeKey + '/notes').once('value').then(function(notesSnap) {
+          var notes = notesSnap.val();
+          if (notes) {
+            if (count > 0) allNotes += '\n\n---\n\n';
+            allNotes += notes;
+            count++;
+          }
+          remaining--;
+          if (remaining === 0) {
+            document.getElementById('release-notes-version').textContent = 'v' + data.latest;
+            document.getElementById('release-notes-body').textContent = allNotes || 'See announcements for details.';
+            document.getElementById('release-notes-modal').style.display = 'flex';
+          }
+        });
       });
     });
   });
@@ -1646,6 +1969,8 @@ function dismissReleaseNotes() {
     if (snap.val()) localStorage.setItem('seenVersion', snap.val());
   });
   document.getElementById('release-notes-modal').style.display = 'none';
+  // Switch to announcements channel so user sees the changelog
+  switchToChannel('announcements');
 }
 
 function hideReleaseNotes() {

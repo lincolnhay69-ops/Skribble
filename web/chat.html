@@ -199,6 +199,34 @@
 
   <div id="toast" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);background:var(--color-accent);color:#fff;padding:8px 20px;border-radius:255px 15px 225px 15px/15px 225px 15px 255px;font-size:0.9rem;z-index:9999;pointer-events:none;white-space:nowrap;transition:opacity 0.3s;"></div>
 
+  <div id="image-viewer-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeImageViewer()">
+    <div class="image-viewer-container" onclick="event.stopPropagation()">
+      <div class="image-viewer-header">
+        <span class="image-viewer-title">Image Preview</span>
+        <div class="image-viewer-controls">
+          <button class="iv-btn" onclick="zoomImageViewer(-0.25)" title="Zoom Out">−</button>
+          <span class="iv-zoom-pct" id="iv-zoom-pct">100%</span>
+          <button class="iv-btn" onclick="zoomImageViewer(0.25)" title="Zoom In">+</button>
+          <button class="iv-btn" onclick="fitImageViewer()" title="Fit to viewport">⛶</button>
+          <button class="iv-btn" onclick="downloadImageViewer()" title="Download">↓</button>
+          <button class="iv-btn iv-close" onclick="closeImageViewer()" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="image-viewer-body" id="iv-body">
+        <img id="iv-image" src="" alt="Preview" onwheel="ivZoomWheel(event)">
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-group-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:300;align-items:center;justify-content:center;" onclick="if(event.target===this)document.getElementById('delete-group-modal').style.display='none'">
+    <div class="card tape" style="width:90%;max-width:340px;padding:24px;text-align:center;" onclick="event.stopPropagation()">
+      <h2 style="font-family:'Kalam',cursive;font-size:1.3rem;margin-bottom:12px;" id="delete-group-title">Delete Group</h2>
+      <p style="font-size:0.9rem;margin-bottom:20px;" id="delete-group-desc">This will permanently delete the group for all members. This cannot be undone.</p>
+      <button class="btn btn-danger" style="width:100%;margin-bottom:8px;" id="confirm-delete-group-btn">Delete</button>
+      <button class="btn btn-secondary" style="width:100%;" onclick="document.getElementById('delete-group-modal').style.display='none'">Cancel</button>
+    </div>
+  </div>
+
   <script src="auth.js"></script>
   <script src="crypto.js"></script>
   <script src="app.js"></script>
