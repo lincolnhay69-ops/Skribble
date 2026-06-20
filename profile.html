@@ -86,7 +86,7 @@
           </div>
 
           <div class="setting-row">
-            <label>Icon Color</label>
+            <label>Avatar Color</label>
             <div class="color-picker-wrap">
               <input type="color" id="icon-color-picker" oninput="setIconColor(this.value)">
               <button class="btn" style="padding:4px 12px;min-height:32px;font-size:0.8rem;" onclick="resetIconColor()">Reset</button>
@@ -244,14 +244,19 @@
     }
 
     function setIconColor(color) {
-      document.body.style.setProperty('--icon-color', color);
-      localStorage.setItem('iconColor', color);
+      if (auth.currentUser) {
+        db.ref('users/' + auth.currentUser.uid + '/avatarColour').set(color).then(function() {
+          showToast('Avatar color updated');
+        }).catch(function() {});
+      }
     }
 
     function resetIconColor() {
-      localStorage.removeItem('iconColor');
-      document.body.style.setProperty('--icon-color', '');
-      document.getElementById('icon-color-picker').value = '#2d2d2d';
+      if (auth.currentUser) {
+        db.ref('users/' + auth.currentUser.uid + '/avatarColour').remove().then(function() {
+          showToast('Avatar color reset');
+        }).catch(function() {});
+      }
     }
 
     function showToast(text) {
@@ -345,10 +350,11 @@
       document.getElementById('scale-display').textContent = Math.round(scale * 100) + '%';
       if (scale !== 1) document.body.style.zoom = scale;
 
-      var iconColor = localStorage.getItem('iconColor');
-      if (iconColor) {
-        document.body.style.setProperty('--icon-color', iconColor);
-        document.getElementById('icon-color-picker').value = iconColor;
+      if (auth.currentUser) {
+        db.ref('users/' + auth.currentUser.uid + '/avatarColour').once('value').then(function(snap) {
+          var c = snap.val();
+          if (c) document.getElementById('icon-color-picker').value = c;
+        });
       }
 
       if (window.__TAURI__) {

@@ -1613,9 +1613,6 @@ function applyUISettings() {
   var scale = parseFloat(localStorage.getItem('uiScale')) || 1;
   if (scale !== 1) document.body.style.zoom = scale;
 
-  var iconColor = localStorage.getItem('iconColor');
-  if (iconColor) document.body.style.setProperty('--icon-color', iconColor);
-
   if (localStorage.getItem('dmCollapsed') === '1') {
     var list = document.getElementById('dm-list');
     var arrow = document.getElementById('dm-collapse-arrow');
@@ -1632,7 +1629,8 @@ function showReleaseNotes() {
       if (!data || !data.latest) return;
       if (data.latest === localStorage.getItem('seenVersion')) return;
       if (!isNewerVersion(myVersion, data.latest)) return;
-      db.ref('appVersion/releases/' + data.latest + '/notes').once('value').then(function(notesSnap) {
+      var safeKey = data.latest.replace(/\./g, '_');
+      db.ref('appVersion/releases/' + safeKey + '/notes').once('value').then(function(notesSnap) {
         var notes = notesSnap.val();
         if (!notes) return;
         document.getElementById('release-notes-version').textContent = 'v' + data.latest;
@@ -1693,7 +1691,15 @@ function showUpdateBanner(version, url) {
 
   document.getElementById('update-download-btn').addEventListener('click', function() {
     if (window.__TAURI__ && url) {
-      window.__TAURI__.core.invoke('open_url', { url: url });
+      var btn = this;
+      btn.textContent = 'Downloading...';
+      btn.disabled = true;
+      window.__TAURI__.core.invoke('download_installer', { url: url }).then(function(path) {
+        btn.textContent = 'Installing...';
+      }).catch(function(err) {
+        btn.textContent = 'Download Failed';
+        console.error('Download failed:', err);
+      });
     } else if (url) {
       window.open(url, '_blank');
     }
