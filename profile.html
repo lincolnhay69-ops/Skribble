@@ -191,8 +191,7 @@
 
     function signOutAndRedirect() {
       auth.signOut().then(function() {
-        localStorage.removeItem('onboardingComplete');
-        window.location.href = 'index.html';
+        window.location.href = 'signin.html';
       });
     }
 

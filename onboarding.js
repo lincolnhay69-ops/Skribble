@@ -8,6 +8,10 @@ var TOTAL_SCREENS = 7;
 init();
 
 function init() {
+  if (auth.currentUser) {
+    window.location.href = 'chat.html';
+    return;
+  }
   auth.onAuthStateChanged(function(user) {
     if (user) {
       window.location.href = 'chat.html';
