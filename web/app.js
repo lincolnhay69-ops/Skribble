@@ -40,30 +40,49 @@ function listenForFriendRequests() {
     var prevCount = friendRequestCount;
     friendRequestCount = 0;
     var newestRequest = null;
+    var pendingFrom = [];
+
     snapshot.forEach(function(child) {
       var req = child.val();
       if (req.status === 'pending') {
-        friendRequestCount++;
+        pendingFrom.push(req.from);
         if (!newestRequest || (req.createdAt || 0) > (newestRequest.createdAt || 0)) {
           newestRequest = req;
         }
       }
     });
-    var badge = document.getElementById('friend-request-badge');
-    if (badge) {
-      if (friendRequestCount > 0) {
-        badge.textContent = friendRequestCount > 99 ? '99+' : friendRequestCount;
-        badge.style.display = 'inline';
-      } else {
-        badge.style.display = 'none';
-      }
+
+    if (pendingFrom.length === 0) {
+      updateFriendBadge(0, null, prevCount, isWindowFocused);
+      return;
     }
-    if (newestRequest && friendRequestCount > prevCount && !isWindowFocused) {
-      db.ref('users/' + newestRequest.from + '/displayName').once('value', function(nameSnap) {
-        notifyMessage({ senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
+
+    // Filter out blocked users
+    db.ref('users/' + myUid + '/blocked').once('value', function(blockSnap) {
+      var blockedMap = blockSnap.val() || {};
+      pendingFrom.forEach(function(fromUid) {
+        if (!blockedMap[fromUid]) friendRequestCount++;
       });
-    }
+      updateFriendBadge(friendRequestCount, newestRequest, prevCount, isWindowFocused);
+    });
   });
+}
+
+function updateFriendBadge(count, newestRequest, prevCount, windowFocused) {
+  var badge = document.getElementById('friend-request-badge');
+  if (badge) {
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  if (newestRequest && count > prevCount && !windowFocused) {
+    db.ref('users/' + newestRequest.from + '/displayName').once('value', function(nameSnap) {
+      notifyMessage({ senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
+    });
+  }
 }
 
 var channelIcons = {
@@ -96,6 +115,8 @@ function initApp() {
   loadDMs();
   loadGroups();
   reportVersion();
+  applyUISettings();
+  showReleaseNotes();
   if (window.__TAURI__) {
     window.__TAURI__.event.listen('before-quit', function() {
       db.ref('users/' + auth.currentUser.uid + '/status').set({ online: false }).then(function() {
@@ -200,9 +221,8 @@ function loadDMs() {
           div.className = 'sidebar-item' + (currentDmId === dmId ? ' active' : '');
           var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
           var colour = userData.avatarColour || '#2d5da1';
-          div.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="dot-' + otherId + '"></span></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (userData.displayName || 'Unknown') + '</span>';
+          div.innerHTML = '<div class="avatar-wrap" onclick="event.stopPropagation();showUserOptions(\'' + otherId + '\')" style="cursor:pointer;"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="dot-' + otherId + '"></span></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="switchToDM(\'' + dmId + '\',\'' + otherId + '\')">' + (userData.displayName || 'Unknown') + '</span>';
           div.dataset.dmId = dmId;
-          div.addEventListener('click', function() { switchToDM(dmId, otherId); });
 
           // Status listener
           (function(uid) {
@@ -240,7 +260,13 @@ function loadDMs() {
                   div.appendChild(badge);
                 }
                 if (!isWindowFocused) {
-                  notifyMessage(m, n);
+                  if (m.ciphertext) {
+                    decryptMsgInPlace(m, 'dm_' + k).then(function() {
+                      notifyMessage(m, n);
+                    });
+                  } else {
+                    notifyMessage(m, n);
+                  }
                 }
               });
             })(key, otherName);
@@ -293,6 +319,7 @@ function switchToChannel(channelId) {
   var messageList = document.getElementById('message-list');
   messageList.innerHTML = '<p class="text-center" style="padding:40px;color:rgba(45,45,45,0.4);">Loading messages...</p>';
 
+  var channelConvPath = 'channel_' + channelId;
   var lastKnownTime = Date.now();
   currentMsgQuery.on('value', function(snapshot) {
     messageList.innerHTML = '';
@@ -315,20 +342,26 @@ function switchToChannel(channelId) {
       }
     });
 
-    if (!isWindowFocused && newMsgs.length > 0) {
-      newMsgs.forEach(function(msg) {
-        if (msg.senderId !== currentUser.uid) {
-          notifyMessage(msg, '#' + channelId);
-        }
-      });
-    }
-
     lastKnownTime = latestTime;
 
-    messages.forEach(function(msg) {
-      appendMessage(msg, messageList);
+    // Decrypt all messages before rendering
+    var decryptPromises = messages.map(function(msg) {
+      return decryptMsgInPlace(msg, channelConvPath);
     });
-    scrollToBottom();
+    Promise.all(decryptPromises).then(function() {
+      if (!isWindowFocused && newMsgs.length > 0) {
+        newMsgs.forEach(function(msg) {
+          if (msg.senderId !== currentUser.uid) {
+            notifyMessage(msg, '#' + channelId);
+          }
+        });
+      }
+
+      messages.forEach(function(msg) {
+        appendMessage(msg, messageList);
+      });
+      scrollToBottom();
+    });
   });
 }
 
@@ -362,6 +395,7 @@ function switchToDM(dmId, otherUserId) {
   var messageList = document.getElementById('message-list');
   messageList.innerHTML = '<p class="text-center" style="padding:40px;color:rgba(45,45,45,0.4);">Loading messages...</p>';
 
+  var dmConvPath = 'dm_' + dmId;
   var lastKnownTime = Date.now();
   currentMsgQuery.on('value', function(snapshot) {
     messageList.innerHTML = '';
@@ -384,20 +418,26 @@ function switchToDM(dmId, otherUserId) {
       }
     });
 
-    if (!isWindowFocused && newMsgs.length > 0) {
-      newMsgs.forEach(function(msg) {
-        if (msg.senderId !== currentUser.uid) {
-          notifyMessage(msg, msg.senderName);
-        }
-      });
-    }
-
     lastKnownTime = latestTime;
 
-    messages.forEach(function(msg) {
-      appendMessage(msg, messageList);
+    // Decrypt all messages before rendering
+    var decryptPromises = messages.map(function(msg) {
+      return decryptMsgInPlace(msg, dmConvPath);
     });
-    scrollToBottom();
+    Promise.all(decryptPromises).then(function() {
+      if (!isWindowFocused && newMsgs.length > 0) {
+        newMsgs.forEach(function(msg) {
+          if (msg.senderId !== currentUser.uid) {
+            notifyMessage(msg, msg.senderName);
+          }
+        });
+      }
+
+      messages.forEach(function(msg) {
+        appendMessage(msg, messageList);
+      });
+      scrollToBottom();
+    });
   });
 }
 
@@ -440,7 +480,7 @@ function appendMessage(msg, container) {
     container.appendChild(div);
   }
 
-  if (msg.imageURL) {
+  if (msg.imageURL || msg.imageData) {
     var wrapper = document.createElement('div');
     wrapper.className = 'message-image tape';
     wrapper.style.marginLeft = isMine ? 'auto' : '0';
@@ -457,13 +497,34 @@ function appendMessage(msg, container) {
     }
 
     var img = document.createElement('img');
-    img.src = msg.imageURL;
+    img.src = msg.imageData || msg.imageURL;
     img.alt = 'Shared image';
     img.style.width = '100%';
     img.style.display = 'block';
     wrapper.appendChild(img);
     container.appendChild(wrapper);
   }
+}
+
+function getConvPath() {
+  if (currentChannelId) return 'channel_' + currentChannelId;
+  if (currentDmId) return 'dm_' + currentDmId;
+  if (currentGroupId) return 'group_' + currentGroupId;
+  return null;
+}
+
+function decryptMsgInPlace(msg, convPath) {
+  if (!msg.ciphertext || msg._decrypted) return Promise.resolve();
+  msg._decrypted = true;
+  return decryptMessage(msg.ciphertext, msg.iv, convPath).then(function(plaintext) {
+    if (plaintext.indexOf('data:image/') === 0) {
+      msg.imageData = plaintext;
+    } else {
+      msg.text = plaintext;
+    }
+  }).catch(function() {
+    msg.text = '[Failed to decrypt]';
+  });
 }
 
 function sendMessage() {
@@ -477,21 +538,25 @@ function sendMessage() {
     return;
   }
 
-  var msg = {
-    senderId: currentUser.uid,
-    senderName: currentUser.displayName,
-    text: text,
-    imageURL: null,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
-  };
+  var convPath = getConvPath();
+  encryptMessage(text, convPath).then(function(encrypted) {
+    var msg = {
+      senderId: currentUser.uid,
+      senderName: currentUser.displayName,
+      text: null,
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
-  if (currentChannelId) {
-    db.ref('channels/' + currentChannelId + '/messages').push(msg);
-  } else if (currentDmId) {
-    db.ref('dms/' + currentDmId + '/messages').push(msg);
-  } else if (currentGroupId) {
-    db.ref('groups/' + currentGroupId + '/messages').push(msg);
-  }
+    if (currentChannelId) {
+      db.ref('channels/' + currentChannelId + '/messages').push(msg);
+    } else if (currentDmId) {
+      db.ref('dms/' + currentDmId + '/messages').push(msg);
+    } else if (currentGroupId) {
+      db.ref('groups/' + currentGroupId + '/messages').push(msg);
+    }
+  });
 
   input.value = '';
   var uid = auth.currentUser.uid;
@@ -512,28 +577,45 @@ function handleImageUpload(event) {
     return;
   }
 
-  var storageRef = storage.ref('images/' + Date.now() + '_' + file.name);
-  storageRef.put(file).then(function(snapshot) {
-    return snapshot.ref.getDownloadURL();
-  }).then(function(url) {
-    var msg = {
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName,
-      text: null,
-      imageURL: url,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
-    };
+  var convPath = getConvPath();
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var maxW = 1200;
+      var scale = Math.min(1, maxW / img.width, maxW / img.height);
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      var compressed = canvas.toDataURL('image/jpeg', 0.75);
 
-    if (currentChannelId) {
-      db.ref('channels/' + currentChannelId + '/messages').push(msg);
-    } else if (currentDmId) {
-      db.ref('dms/' + currentDmId + '/messages').push(msg);
-    } else if (currentGroupId) {
-      db.ref('groups/' + currentGroupId + '/messages').push(msg);
-    }
-  }).catch(function(err) {
-    console.error('Upload failed:', err);
-  });
+      encryptMessage(compressed, convPath).then(function(encrypted) {
+        var msg = {
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          text: null,
+          ciphertext: encrypted.ciphertext,
+          iv: encrypted.iv,
+          createdAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        if (currentChannelId) {
+          db.ref('channels/' + currentChannelId + '/messages').push(msg);
+        } else if (currentDmId) {
+          db.ref('dms/' + currentDmId + '/messages').push(msg);
+        } else if (currentGroupId) {
+          db.ref('groups/' + currentGroupId + '/messages').push(msg);
+        }
+      });
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    showToast('Failed to read image.');
+  };
+  reader.readAsDataURL(file);
 
   event.target.value = '';
 }
@@ -559,7 +641,7 @@ function notifyMessage(msg, source) {
   ensureNotifPermission().then(function(granted) {
     if (!granted) { console.log('Notif skipped: permission not granted'); return; }
     var title = "Scribble - " + source;
-    var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
+    var body = (msg.senderName || "Someone") + ": " + (msg.text || (msg.imageData ? "Image" : (msg.ciphertext ? "Encrypted message" : "Image")));
     console.log('Sending notification:', title, body);
     window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
       console.error('Notification failed:', e);
@@ -592,6 +674,21 @@ function toggleSidebar() {
   document.getElementById('sidebar-overlay').classList.toggle('open');
 }
 
+function toggleDMList() {
+  var list = document.getElementById('dm-list');
+  var arrow = document.getElementById('dm-collapse-arrow');
+  var collapsed = list.style.display === 'none';
+  list.style.display = collapsed ? 'block' : 'none';
+  if (arrow) arrow.classList.toggle('collapsed', !collapsed);
+  localStorage.setItem('dmCollapsed', collapsed ? '0' : '1');
+}
+
+function logoutFromSidebar() {
+  auth.signOut().then(function() {
+    window.location.href = 'signin.html';
+  });
+}
+
 function showNewDMModal() {
   document.getElementById('new-dm-modal').style.display = 'flex';
   loadAllUsers();
@@ -609,10 +706,13 @@ function loadAllUsers() {
 
   Promise.all([
     db.ref('users').once('value'),
-    db.ref('friendRequests').once('value')
+    db.ref('friendRequests').once('value'),
+    db.ref('users/' + myUid + '/blocked').once('value')
   ]).then(function(results) {
     var usersSnapshot = results[0];
     var reqSnapshot = results[1];
+    var blockedSnap = results[2];
+    var blockedMap = blockedSnap.val() || {};
     var resultsList = document.getElementById('user-search-results');
     resultsList.innerHTML = '';
 
@@ -636,7 +736,8 @@ function loadAllUsers() {
 
       var status = relMap[child.key];
       var badgeHtml = '';
-      if (status === 'pending') badgeHtml = '<span class="relationship-badge pending">Pending</span>';
+      if (blockedMap[child.key]) badgeHtml = '<span class="relationship-badge blocked">Blocked</span>';
+      else if (status === 'pending') badgeHtml = '<span class="relationship-badge pending">Pending</span>';
       else if (status === 'request') badgeHtml = '<span class="relationship-badge request">Request</span>';
       else if (status === 'accepted') badgeHtml = '<span class="relationship-badge friend">Friend</span>';
 
@@ -718,16 +819,20 @@ function showUserProfile(uid) {
   var profileCard = document.getElementById('profile-card');
   profileCard.innerHTML = '<p style="color:rgba(45,45,45,0.4);font-size:0.9rem;">Loading profile...</p>';
 
+  var myUid = auth.currentUser.uid;
   Promise.all([
     db.ref('users/' + uid).once('value'),
-    db.ref('friendRequests').once('value')
+    db.ref('friendRequests').once('value'),
+    db.ref('users/' + myUid + '/blocked/' + uid).once('value'),
+    db.ref('users/' + uid + '/blocked/' + myUid).once('value')
   ]).then(function(results) {
     var userSnapshot = results[0];
     if (!userSnapshot.exists()) return;
     var userData = userSnapshot.val();
     var reqSnapshot = results[1];
+    var iBlockedThem = results[2].val();
+    var theyBlockedMe = results[3].val();
 
-    var myUid = auth.currentUser.uid;
     var requestId_me = myUid + '_' + uid;
     var requestId_them = uid + '_' + myUid;
     var myRequest = null;
@@ -752,7 +857,11 @@ function showUserProfile(uid) {
 
     var actionsHtml = '';
 
-    if (myRequest && myRequest.status === 'pending') {
+    if (iBlockedThem) {
+      actionsHtml = '<p style="font-size:0.85rem;color:rgba(45,45,45,0.5);margin-bottom:8px;">You have blocked this user.</p><button class="btn friend-btn" onclick="unblockUser(\'' + uid + '\')">Unblock</button>';
+    } else if (theyBlockedMe) {
+      actionsHtml = '<p style="font-size:0.85rem;color:rgba(45,45,45,0.5);margin-bottom:8px;">This user has blocked you.</p>';
+    } else if (myRequest && myRequest.status === 'pending') {
       var lastBump = myRequest.lastBump || 0;
       var cooldown = 3600000 - (Date.now() - lastBump);
       if (cooldown > 0) {
@@ -761,12 +870,17 @@ function showUserProfile(uid) {
       } else {
         actionsHtml = '<button class="btn friend-btn" onclick="bumpFriendRequest(\'' + uid + '\')">Bump Request</button>';
       }
+      actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     } else if (theirRequest && theirRequest.status === 'pending') {
       actionsHtml = '<button class="btn friend-btn" style="background:var(--color-secondary);color:#fff;" onclick="acceptFriendRequest(\'' + uid + '\')">Accept Request</button><button class="btn btn-secondary friend-btn" onclick="declineFriendRequest(\'' + uid + '\')">Decline</button>';
+      actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     } else if ((myRequest && myRequest.status === 'accepted') || (theirRequest && theirRequest.status === 'accepted')) {
       actionsHtml = '<button class="btn friend-btn" style="background:var(--color-secondary);color:#fff;" onclick="startDM(\'' + uid + '\')">Message</button>';
+      actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="unfriend(\'' + uid + '\')">Unfriend</button>';
+      actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     } else {
       actionsHtml = '<button class="btn friend-btn" onclick="sendFriendRequest(\'' + uid + '\')">Send Friend Request</button>';
+      actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     }
 
     actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="shareProfile(\'' + uid + '\')">Share Profile</button>';
@@ -800,23 +914,30 @@ function showUserProfile(uid) {
 
 function sendFriendRequest(toUid) {
   var myUid = auth.currentUser.uid;
-  var requestId = myUid + '_' + toUid;
 
-  var updates = {};
-  updates['friendRequests/' + requestId] = {
-    from: myUid,
-    to: toUid,
-    status: 'pending',
-    lastBump: 0,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
-  };
-  updates['users/' + myUid + '/following/' + toUid] = true;
-  updates['users/' + toUid + '/followers/' + myUid] = true;
+  db.ref('users/' + myUid + '/blocked/' + toUid).once('value').then(function(blockedSnap) {
+    if (blockedSnap.val()) { showToast('You have blocked this user.'); return; }
+    db.ref('users/' + toUid + '/blocked/' + myUid).once('value').then(function(blockedBySnap) {
+      if (blockedBySnap.val()) { showToast('This user has blocked you.'); return; }
 
-  db.ref().update(updates).then(function() {
-    showToast('Friend request sent!');
-    showUserProfile(toUid);
-    loadAllUsers();
+      var requestId = myUid + '_' + toUid;
+      var updates = {};
+      updates['friendRequests/' + requestId] = {
+        from: myUid,
+        to: toUid,
+        status: 'pending',
+        lastBump: 0,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      };
+      updates['users/' + myUid + '/following/' + toUid] = true;
+      updates['users/' + toUid + '/followers/' + myUid] = true;
+
+      db.ref().update(updates).then(function() {
+        showToast('Friend request sent!');
+        showUserProfile(toUid);
+        loadAllUsers();
+      });
+    });
   });
 }
 
@@ -864,11 +985,232 @@ function bumpFriendRequest(toUid) {
   });
 }
 
+function unfriend(uid) {
+  var myUid = auth.currentUser.uid;
+  var ids = [myUid, uid].sort();
+  var dmId = ids.join('_');
+
+  var updates = {};
+  updates['users/' + myUid + '/following/' + uid] = null;
+  updates['users/' + uid + '/followers/' + myUid] = null;
+  updates['friendRequests/' + myUid + '_' + uid] = null;
+  updates['friendRequests/' + uid + '_' + myUid] = null;
+  updates['dms/' + dmId] = null;
+  updates['userDMs/' + myUid + '/' + dmId] = null;
+  updates['userDMs/' + uid + '/' + dmId] = null;
+
+  db.ref().update(updates).then(function() {
+    showToast('Unfriended.');
+    if (currentDmId === dmId) {
+      currentDmId = null;
+      switchToChannel('general');
+    }
+    showUserProfile(uid);
+    loadAllUsers();
+  });
+}
+
+function blockUser(uid) {
+  var myUid = auth.currentUser.uid;
+  var updates = {};
+  updates['users/' + myUid + '/blocked/' + uid] = true;
+  // Also remove friend relationship if exists
+  var ids = [myUid, uid].sort();
+  var dmId = ids.join('_');
+  updates['users/' + myUid + '/following/' + uid] = null;
+  updates['users/' + uid + '/followers/' + myUid] = null;
+  updates['friendRequests/' + myUid + '_' + uid] = null;
+  updates['friendRequests/' + uid + '_' + myUid] = null;
+  updates['dms/' + dmId] = null;
+  updates['userDMs/' + myUid + '/' + dmId] = null;
+  updates['userDMs/' + uid + '/' + dmId] = null;
+
+  db.ref().update(updates).then(function() {
+    showToast('User blocked.');
+    if (currentDmId === dmId) {
+      currentDmId = null;
+      switchToChannel('general');
+    }
+    showUserProfile(uid);
+    loadAllUsers();
+  });
+}
+
+function unblockUser(uid) {
+  var myUid = auth.currentUser.uid;
+  db.ref('users/' + myUid + '/blocked/' + uid).remove().then(function() {
+    showToast('User unblocked.');
+    showUserProfile(uid);
+    loadAllUsers();
+  });
+}
+
 function shareProfile(uid) {
   navigator.clipboard.writeText('Scribble profile: ' + window.location.origin + '/?user=' + uid).then(function() {
     showToast('Profile link copied!');
   }).catch(function() {
     showToast('Profile: ' + uid);
+  });
+}
+
+// ===== USER OPTIONS =====
+
+var _userOptionsUid = null;
+
+function showUserOptions(uid) {
+  _userOptionsUid = uid;
+  var myUid = auth.currentUser.uid;
+  var header = document.getElementById('user-options-header');
+  var buttons = document.getElementById('user-options-buttons');
+
+  Promise.all([
+    db.ref('users/' + uid).once('value'),
+    db.ref('friendRequests/' + myUid + '_' + uid).once('value'),
+    db.ref('friendRequests/' + uid + '_' + myUid).once('value'),
+    db.ref('users/' + myUid + '/blocked/' + uid).once('value')
+  ]).then(function(results) {
+    var userSnap = results[0];
+    if (!userSnap.exists()) { showToast('User not found.'); return; }
+    var userData = userSnap.val();
+    var myReq = results[1].val();
+    var theirReq = results[2].val();
+    var blocked = results[3].val();
+
+    var initial = (userData.displayName || '?').charAt(0).toUpperCase();
+    var colour = userData.avatarColour || '#2d5da1';
+
+    header.innerHTML = '<div class="uoptions-avatar" style="background:' + colour + ';">' + initial + '</div><div class="uoptions-name">' + (userData.displayName || 'Unknown') + '</div>';
+
+    var html = '';
+    var isFriend = (myReq && myReq.status === 'accepted') || (theirReq && theirReq.status === 'accepted');
+
+    // Message button
+    html += '<button class="btn uoptions-btn" onclick="startDMFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5h12A1.5 1.5 0 0115.5 4v7a1.5 1.5 0 01-1.5 1.5H4l-2.5 2V4A1.5 1.5 0 012 2.5z"/></svg> Message</button>';
+
+    if (isFriend) {
+      html += '<button class="btn btn-secondary uoptions-btn" onclick="unfriendFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 8.5L12.5 11M12.5 8.5L10 11"/></svg> Unfriend</button>';
+    }
+
+    if (blocked) {
+      html += '<button class="btn btn-secondary uoptions-btn" onclick="unblockFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M4.5 4.5l7 7"/><path d="M11.5 4.5l-7 7"/></svg> Unblock</button>';
+    } else {
+      html += '<button class="btn btn-secondary uoptions-btn" onclick="blockFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M4.5 4.5l7 7"/></svg> Block</button>';
+    }
+
+    // Create group with this person
+    html += '<button class="btn btn-secondary uoptions-btn" onclick="createGroupFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 7h4M12 5v4"/></svg> Create Group</button>';
+
+    // Add to group
+    html += '<button class="btn btn-secondary uoptions-btn" onclick="toggleAddToGroupList()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 6h4M12 4v4"/></svg> Add to Group <span style="margin-left:auto;">▸</span></button>';
+    html += '<div class="uoptions-group-list" id="uoptions-group-list"><p id="uoptions-groups-placeholder">Loading...</p></div>';
+
+    buttons.innerHTML = html;
+    _groupListLoaded = false;
+    document.getElementById('user-options-modal').style.display = 'flex';
+  });
+}
+
+function hideUserOptions() {
+  document.getElementById('user-options-modal').style.display = 'none';
+  _userOptionsUid = null;
+}
+
+function startDMFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  var myUid = auth.currentUser.uid;
+  var ids = [myUid, uid].sort();
+  var dmId = ids.join('_');
+  hideUserOptions();
+  switchToDM(dmId, uid);
+}
+
+function unfriendFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  unfriend(uid);
+}
+
+function blockFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  blockUser(uid);
+}
+
+function unblockFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  unblockUser(uid);
+}
+
+function createGroupFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  var name = prompt('Enter a group name:');
+  if (!name || !name.trim()) return;
+  name = name.trim();
+
+  var code = generateJoinCode();
+  var myUid = auth.currentUser.uid;
+  var groupData = {
+    name: name,
+    createdBy: myUid,
+    joinCode: code,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    members: {}
+  };
+  groupData.members[myUid] = true;
+  groupData.members[uid] = true;
+
+  db.ref('groups').push(groupData).then(function() {
+    showToast('Group "' + name + '" created! Code: ' + code);
+  });
+}
+
+var _groupListLoaded = false;
+
+function toggleAddToGroupList() {
+  var list = document.getElementById('uoptions-group-list');
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  if (list.classList.contains('open')) {
+    list.classList.remove('open');
+    return;
+  }
+  list.classList.add('open');
+  if (_groupListLoaded) return;
+  _groupListLoaded = true;
+
+  var myUid = auth.currentUser.uid;
+  list.innerHTML = '<p id="uoptions-groups-placeholder">Loading...</p>';
+
+  db.ref('groups').orderByChild('createdBy').equalTo(myUid).once('value').then(function(snap) {
+    var groups = [];
+    snap.forEach(function(child) {
+      groups.push({ id: child.key, name: child.val().name });
+    });
+    if (groups.length === 0) {
+      list.innerHTML = '<p id="uoptions-groups-placeholder">You haven\'t created any groups.</p>';
+      return;
+    }
+    var html = '';
+    groups.forEach(function(g) {
+      html += '<div class="uoptions-group-item" onclick="addUserToGroup(\'' + uid + '\',\'' + g.id + '\')">' + g.name + '</div>';
+    });
+    list.innerHTML = html;
+  });
+}
+
+function addUserToGroup(uid, groupId) {
+  db.ref('groups/' + groupId + '/members/' + uid).set(true).then(function() {
+    db.ref('groups/' + groupId + '/name').once('value').then(function(snap) {
+      hideUserOptions();
+      showToast('Added to "' + (snap.val() || 'group') + '"');
+    });
   });
 }
 
@@ -939,7 +1281,13 @@ function setupNotificationListeners() {
         var msg = msgSnap.val();
         if (!msg || msg.senderId === uid) return;
         if (!isWindowFocused) {
-          notifyMessage(msg, '# ' + channelName);
+          if (msg.ciphertext) {
+            decryptMsgInPlace(msg, 'channel_' + channelId).then(function() {
+              notifyMessage(msg, '# ' + channelName);
+            });
+          } else {
+            notifyMessage(msg, '# ' + channelName);
+          }
         }
       });
     });
@@ -958,7 +1306,13 @@ function setupNotificationListeners() {
         var msg = msgSnap.val();
         if (!msg || msg.senderId === uid) return;
         if (!isWindowFocused) {
-          notifyMessage(msg, groupName);
+          if (msg.ciphertext) {
+            decryptMsgInPlace(msg, 'group_' + groupId).then(function() {
+              notifyMessage(msg, groupName);
+            });
+          } else {
+            notifyMessage(msg, groupName);
+          }
         }
       });
     });
@@ -978,10 +1332,14 @@ function switchToGroup(groupId) {
   if (badgeEl) badgeEl.remove();
   startTypingListener('groups/' + groupId);
 
+  var groupConvPath = 'group_' + groupId;
+  var groupName = 'Group';
   db.ref('groups/' + groupId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
-      var code = snapshot.val().joinCode;
-      document.getElementById('current-channel-name').innerHTML = groupIcon + ' ' + snapshot.val().name + (code ? ' <span style="font-size:0.8rem;opacity:0.6;margin-left:8px;">Code: ' + code + '</span>' : '');
+      var data = snapshot.val();
+      groupName = data.name || 'Group';
+      var code = data.joinCode;
+      document.getElementById('current-channel-name').innerHTML = groupIcon + ' ' + groupName + (code ? ' <span style="font-size:0.8rem;opacity:0.6;margin-left:8px;">Code: ' + code + '</span>' : '');
     }
   });
 
@@ -1018,20 +1376,26 @@ function switchToGroup(groupId) {
       }
     });
 
-    if (!isWindowFocused && newMsgs.length > 0) {
-      newMsgs.forEach(function(msg) {
-        if (msg.senderId !== currentUser.uid) {
-          notifyMessage(msg, grp.name || 'Group');
-        }
-      });
-    }
-
     lastKnownTime = latestTime;
 
-    messages.forEach(function(msg) {
-      appendMessage(msg, messageList);
+    // Decrypt all messages before rendering
+    var decryptPromises = messages.map(function(msg) {
+      return decryptMsgInPlace(msg, groupConvPath);
     });
-    scrollToBottom();
+    Promise.all(decryptPromises).then(function() {
+      if (!isWindowFocused && newMsgs.length > 0) {
+        newMsgs.forEach(function(msg) {
+          if (msg.senderId !== currentUser.uid) {
+            notifyMessage(msg, groupName);
+          }
+        });
+      }
+
+      messages.forEach(function(msg) {
+        appendMessage(msg, messageList);
+      });
+      scrollToBottom();
+    });
   });
 }
 
@@ -1243,6 +1607,51 @@ function reportVersion() {
       reportedAt: firebase.database.ServerValue.TIMESTAMP
     });
   });
+}
+
+function applyUISettings() {
+  var scale = parseFloat(localStorage.getItem('uiScale')) || 1;
+  if (scale !== 1) document.body.style.zoom = scale;
+
+  var iconColor = localStorage.getItem('iconColor');
+  if (iconColor) document.body.style.setProperty('--icon-color', iconColor);
+
+  if (localStorage.getItem('dmCollapsed') === '1') {
+    var list = document.getElementById('dm-list');
+    var arrow = document.getElementById('dm-collapse-arrow');
+    if (list) list.style.display = 'none';
+    if (arrow) arrow.classList.add('collapsed');
+  }
+}
+
+function showReleaseNotes() {
+  if (!window.__TAURI__) return;
+  window.__TAURI__.app.getVersion().then(function(myVersion) {
+    db.ref('appVersion').once('value').then(function(snap) {
+      var data = snap.val();
+      if (!data || !data.latest) return;
+      if (data.latest === localStorage.getItem('seenVersion')) return;
+      if (!isNewerVersion(myVersion, data.latest)) return;
+      db.ref('appVersion/releases/' + data.latest + '/notes').once('value').then(function(notesSnap) {
+        var notes = notesSnap.val();
+        if (!notes) return;
+        document.getElementById('release-notes-version').textContent = 'v' + data.latest;
+        document.getElementById('release-notes-body').textContent = notes;
+        document.getElementById('release-notes-modal').style.display = 'flex';
+      });
+    });
+  });
+}
+
+function dismissReleaseNotes() {
+  db.ref('appVersion/latest').once('value').then(function(snap) {
+    if (snap.val()) localStorage.setItem('seenVersion', snap.val());
+  });
+  document.getElementById('release-notes-modal').style.display = 'none';
+}
+
+function hideReleaseNotes() {
+  document.getElementById('release-notes-modal').style.display = 'none';
 }
 
 function isNewerVersion(current, latest) {

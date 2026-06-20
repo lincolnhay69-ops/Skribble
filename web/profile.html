@@ -59,7 +59,7 @@
     </div>
   </div>
 
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px;">
     <div class="card tape" style="width:90%;max-width:420px;text-align:center;padding:32px;">
       <div id="profile-avatar" style="margin-bottom:16px;display:flex;justify-content:center;"></div>
 
@@ -71,6 +71,33 @@
         <div>✦ joined <strong id="joined-date">—</strong></div>
         <div>✦ following <strong id="following-count">0</strong></div>
         <div>✦ followers <strong id="followers-count">0</strong></div>
+      </div>
+
+      <div class="card" style="padding:14px 18px;text-align:left;margin-bottom:20px;">
+        <h3 style="font-family:'Kalam',cursive;font-size:1.1rem;margin-bottom:12px;">⚙️ Settings</h3>
+
+        <div class="settings-card">
+          <div class="setting-row">
+            <label>UI Scale</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="range" id="ui-scale-slider" min="0.75" max="1.5" step="0.05" value="1" oninput="setUIScale(this.value)">
+              <span class="scale-display" id="scale-display">100%</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label>Icon Color</label>
+            <div class="color-picker-wrap">
+              <input type="color" id="icon-color-picker" oninput="setIconColor(this.value)">
+              <button class="btn" style="padding:4px 12px;min-height:32px;font-size:0.8rem;" onclick="resetIconColor()">Reset</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label>Version</label>
+            <span id="profile-version" style="font-size:0.9rem;">—</span>
+          </div>
+        </div>
       </div>
 
       <button class="btn btn-secondary" style="width:100%;margin-bottom:8px;" onclick="window.location.href='chat.html'">Back to Chat</button>
@@ -148,28 +175,46 @@
     });
 
     function editName() {
-      var nameEl = document.getElementById('profile-name');
-      var currentName = nameEl.textContent;
-      var input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'input';
-      input.value = currentName;
-      input.style.fontFamily = "'Kalam',cursive";
-      input.style.fontSize = '2rem';
-      input.style.textAlign = 'center';
-      input.style.marginBottom = '4px';
+      var myUid = auth.currentUser.uid;
 
-      nameEl.replaceWith(input);
-      input.focus();
-      input.select();
+      db.ref('users/' + myUid + '/lastNameChange').once('value').then(function(snap) {
+        var lastChange = snap.val() || 0;
+        var daysSince = (Date.now() - lastChange) / 86400000;
+        if (daysSince < 7 && lastChange > 0) {
+          var remaining = Math.ceil(7 - daysSince);
+          showToast('You can change your name again in ' + remaining + ' day' + (remaining === 1 ? '' : 's') + '.');
+          return;
+        }
 
-      input.addEventListener('blur', function() { saveName(input); });
-      input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') input.blur();
+        var nameEl = document.getElementById('profile-name');
+        var currentName = nameEl.textContent;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'input';
+        input.value = currentName;
+        input.style.fontFamily = "'Kalam',cursive";
+        input.style.fontSize = '2rem';
+        input.style.textAlign = 'center';
+        input.style.marginBottom = '4px';
+
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        var saved = false;
+        function onSave() {
+          if (saved) return;
+          saved = true;
+          saveName(input, myUid);
+        }
+        input.addEventListener('blur', onSave);
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') input.blur();
+        });
       });
     }
 
-    function saveName(input) {
+    function saveName(input, myUid) {
       var newName = input.value.trim() || 'Unnamed';
 
       var nameEl = document.createElement('h1');
@@ -185,8 +230,39 @@
 
       if (auth.currentUser) {
         auth.currentUser.updateProfile({ displayName: newName });
-        db.ref('users/' + auth.currentUser.uid).update({ displayName: newName });
+        var updates = {};
+        updates['users/' + auth.currentUser.uid + '/displayName'] = newName;
+        updates['users/' + auth.currentUser.uid + '/lastNameChange'] = Date.now();
+        db.ref().update(updates);
       }
+    }
+
+    function setUIScale(val) {
+      document.body.style.zoom = val;
+      localStorage.setItem('uiScale', val);
+      document.getElementById('scale-display').textContent = Math.round(val * 100) + '%';
+    }
+
+    function setIconColor(color) {
+      document.body.style.setProperty('--icon-color', color);
+      localStorage.setItem('iconColor', color);
+    }
+
+    function resetIconColor() {
+      localStorage.removeItem('iconColor');
+      document.body.style.setProperty('--icon-color', '');
+      document.getElementById('icon-color-picker').value = '#2d2d2d';
+    }
+
+    function showToast(text) {
+      var old = document.querySelector('.profile-toast');
+      if (old) old.remove();
+      var toast = document.createElement('div');
+      toast.className = 'profile-toast';
+      toast.textContent = text;
+      toast.style.cssText = 'position:fixed;top:56px;left:50%;transform:translateX(-50%);background:var(--color-accent);color:#fff;padding:8px 20px;border-radius:255px 15px 225px 15px/15px 225px 15px 255px;font-size:0.9rem;z-index:9999;pointer-events:none;white-space:nowrap;transition:opacity 0.3s;';
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { toast.remove(); }, 300); }, 2500);
     }
 
     function signOutAndRedirect() {
@@ -261,6 +337,28 @@
     }
 
     initTheme();
+    initProfileSettings();
+
+    function initProfileSettings() {
+      var scale = parseFloat(localStorage.getItem('uiScale')) || 1;
+      document.getElementById('ui-scale-slider').value = scale;
+      document.getElementById('scale-display').textContent = Math.round(scale * 100) + '%';
+      if (scale !== 1) document.body.style.zoom = scale;
+
+      var iconColor = localStorage.getItem('iconColor');
+      if (iconColor) {
+        document.body.style.setProperty('--icon-color', iconColor);
+        document.getElementById('icon-color-picker').value = iconColor;
+      }
+
+      if (window.__TAURI__) {
+        window.__TAURI__.app.getVersion().then(function(v) {
+          document.getElementById('profile-version').textContent = v;
+        });
+      } else {
+        document.getElementById('profile-version').textContent = 'Web';
+      }
+    }
 
     if (window.__TAURI__) {
       var appWin = window.__TAURI__.window.getCurrentWindow();

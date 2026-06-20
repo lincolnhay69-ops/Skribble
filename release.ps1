@@ -147,16 +147,37 @@ Write-Host ""
 Write-Host "=== Updating Firebase ===" -ForegroundColor Magenta
 $secret = $env:FIREBASE_SECRET
 if ($secret) {
+    $firebaseUrl = "https://telegram-a007d-default-rtdb.firebaseio.com"
+
+    # Update latest version and download URL
     $body = @{
         latest = $version
         downloadUrl = $downloadUrl
     }
     $json = $body | ConvertTo-Json
-
-    $firebaseUrl = "https://telegram-a007d-default-rtdb.firebaseio.com/appVersion.json?auth=$secret"
-
     Write-Host "Writing to Firebase: latest=$version, downloadUrl=$downloadUrl" -ForegroundColor Gray
-    Invoke-RestMethod -Uri $firebaseUrl -Method Put -Body $json -ContentType "application/json"
+    Invoke-RestMethod -Uri "$firebaseUrl/appVersion.json?auth=$secret" -Method Put -Body $json -ContentType "application/json"
+
+    # Write release notes
+    if (Test-Path $notesPath) {
+        $notesText = Get-Content $notesPath -Raw
+        $notesBody = @{ notes = $notesText } | ConvertTo-Json
+        Write-Host "Writing release notes to Firebase..." -ForegroundColor Gray
+        Invoke-RestMethod -Uri "$firebaseUrl/appVersion/releases/$version.json?auth=$secret" -Method Put -Body $notesBody -ContentType "application/json"
+    }
+
+    # Post to announcements channel
+    $announcementMsg = @{
+        senderId = "system"
+        senderName = "Scribble"
+        text = "🚀 Scribble v$version has been released! Check the What's New modal for details."
+        imageURL = $null
+        createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $announcementJson = $announcementMsg | ConvertTo-Json
+    Write-Host "Posting to announcements channel..." -ForegroundColor Gray
+    Invoke-RestMethod -Uri "$firebaseUrl/channels/announcements/messages.json?auth=$secret" -Method Post -Body $announcementJson -ContentType "application/json"
+
     Write-Host "Firebase updated successfully!" -ForegroundColor Green
 } else {
     Write-Warning "Skipping Firebase update."

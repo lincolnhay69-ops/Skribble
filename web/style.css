@@ -10,6 +10,7 @@
   --color-shadow: #2d2d2d;
   --font-heading: 'Kalam', cursive;
   --font-body: 'Patrick Hand', cursive;
+  --icon-color: var(--color-foreground);
 }
 
 body.dark {
@@ -729,4 +730,181 @@ body {
     padding-bottom: 12px;
     max-height: 160px;
   }
+}
+
+/* === RELEASE NOTES MODAL === */
+.release-notes-body {
+  max-height: 360px;
+  overflow-y: auto;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  text-align: left;
+  background: var(--color-white);
+  border: 2px solid var(--color-border);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* === COLLAPSIBLE DM SECTION === */
+#dm-section-header {
+  cursor: pointer;
+  user-select: none;
+}
+#dm-section-header:hover {
+  opacity: 0.7;
+}
+#dm-section-header .collapse-arrow {
+  font-size: 0.7rem;
+  margin-left: 4px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+#dm-section-header .collapse-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* === BLOCK BADGE === */
+.relationship-badge.blocked {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #c62828;
+}
+
+/* === SIDEBAR LOGOUT === */
+#sidebar-logout {
+  margin-top: auto;
+  border-top: 2px dashed var(--color-border);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+#sidebar-logout:hover {
+  background: var(--color-accent);
+  color: var(--color-white);
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+/* === SETTINGS CARD === */
+.settings-card {
+  text-align: left;
+  margin-bottom: 20px;
+}
+.settings-card label {
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+.settings-card input[type="range"] {
+  width: 100%;
+  margin: 8px 0;
+}
+.settings-card .setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--color-muted);
+}
+.settings-card .setting-row:last-child {
+  border-bottom: none;
+}
+.color-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-picker-wrap input[type="color"] {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--color-border);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+}
+.scale-display {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* === ICON COLOR === */
+.sidebar-item svg,
+.window-btn svg,
+#hamburger svg,
+#sidebar-logout svg,
+.btn svg,
+.uoptions-btn svg,
+.avatar-wrap svg,
+#dm-section-header svg,
+.sidebar-section-title svg {
+  color: var(--icon-color);
+}
+
+/* === USER OPTIONS MODAL === */
+#user-options-header .uoptions-avatar {
+  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  border: 3px solid var(--color-border);
+  box-shadow: 4px 4px 0px 0px var(--color-shadow);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--color-foreground);
+  flex-shrink: 0;
+}
+#user-options-header .uoptions-name {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uoptions-btn {
+  width: 100%;
+  margin-bottom: 6px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.uoptions-btn svg {
+  flex-shrink: 0;
+}
+.uoptions-group-list {
+  margin-left: 24px;
+  margin-bottom: 6px;
+  display: none;
+}
+.uoptions-group-list.open {
+  display: block;
+}
+.uoptions-group-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  border-bottom: 1px dashed var(--color-muted);
+  transition: background 0.1s;
+}
+.uoptions-group-item:hover {
+  background: var(--color-muted);
+}
+.uoptions-group-item:last-child {
+  border-bottom: none;
+}
+#uoptions-groups-placeholder {
+  font-size: 0.85rem;
+  color: rgba(45,45,45,0.4);
+  padding: 6px 12px;
 }

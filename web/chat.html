@@ -83,11 +83,16 @@
 
       <hr class="sidebar-divider">
 
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 12px;">
-        <span class="sidebar-section-title" style="padding:0;">Direct Messages <span id="friend-request-badge" style="display:none;background:#ff4d4d;color:#fff;font-size:0.65rem;padding:1px 5px;border-radius:8px;vertical-align:middle;margin-left:4px;"></span></span>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 12px;" id="dm-section-header">
+        <span class="sidebar-section-title" style="padding:0;display:flex;align-items:center;" onclick="toggleDMList()">Direct Messages <span class="collapse-arrow" id="dm-collapse-arrow">▼</span> <span id="friend-request-badge" style="display:none;background:#ff4d4d;color:#fff;font-size:0.65rem;padding:1px 5px;border-radius:8px;vertical-align:middle;margin-left:4px;"></span></span>
         <button onclick="showNewDMModal()" style="background:none;border:2px solid var(--color-border);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;width:32px;height:32px;cursor:pointer;font-family:var(--font-heading);font-size:1.2rem;line-height:1;display:flex;align-items:center;justify-content:center;">+</button>
       </div>
       <div id="dm-list"></div>
+
+      <div class="sidebar-item" id="sidebar-logout" onclick="logoutFromSidebar()">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3"/><path d="M11 11l3-3-3-3"/><path d="M14 8H6"/></svg>
+        <span>Log Out</span>
+      </div>
     </aside>
 
     <div class="message-area">
@@ -175,9 +180,27 @@
     </div>
   </div>
 
+  <div id="release-notes-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)hideReleaseNotes()">
+    <div class="card" style="width:90%;max-width:480px;padding:24px;" onclick="event.stopPropagation()">
+      <h3 style="font-family:'Kalam',cursive;font-size:1.3rem;margin-bottom:4px;">What's New</h3>
+      <p style="font-size:0.85rem;color:rgba(45,45,45,0.6);margin-bottom:16px;" id="release-notes-version"></p>
+      <div class="release-notes-body" id="release-notes-body">Loading...</div>
+      <button class="btn" style="width:100%;" onclick="dismissReleaseNotes()">Got it!</button>
+    </div>
+  </div>
+
+  <div id="user-options-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)hideUserOptions()">
+    <div class="card" style="width:90%;max-width:360px;padding:20px;" onclick="event.stopPropagation()">
+      <div id="user-options-header" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"></div>
+      <div id="user-options-buttons"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:12px;" onclick="hideUserOptions()">Close</button>
+    </div>
+  </div>
+
   <div id="toast" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);background:var(--color-accent);color:#fff;padding:8px 20px;border-radius:255px 15px 225px 15px/15px 225px 15px 255px;font-size:0.9rem;z-index:9999;pointer-events:none;white-space:nowrap;transition:opacity 0.3s;"></div>
 
   <script src="auth.js"></script>
+  <script src="crypto.js"></script>
   <script src="app.js"></script>
   <script>
     initTheme();
