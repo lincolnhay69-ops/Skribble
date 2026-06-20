@@ -662,24 +662,25 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px;
+  padding: 4px;
   flex-shrink: 0;
   display: none;
   color: var(--color-foreground);
   opacity: 0.4;
   line-height: 1;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   align-items: center;
   justify-content: center;
   margin-left: auto;
 }
-
 .sidebar-item:hover .dm-delete-btn {
-  display: flex;
+  display: inline-flex;
 }
-
+.dm-delete-btn svg {
+  display: block;
+}
 .dm-delete-btn:hover {
   opacity: 1;
   color: var(--color-accent);
@@ -915,14 +916,19 @@ body {
 }
 
 .msg-actions {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  width: 26px;
+  flex-shrink: 0;
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 .message-row:hover .msg-actions {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
 }
 
 .msg-action-btn {

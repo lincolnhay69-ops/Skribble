@@ -23,6 +23,12 @@ if (window.__TAURI__) {
     var dot = document.getElementById('own-status-dot');
     if (dot) dot.className = 'status-dot away';
   });
+  // Listen for notification clicks globally
+  window.__TAURI__.event.listen('notification', function() {
+    window.__TAURI__.core.invoke('show_window').catch(function(e) {
+      console.error('show_window failed:', e);
+    });
+  });
 }
 
 function updateOnlineStatus() {
@@ -122,9 +128,6 @@ function initApp() {
       db.ref('users/' + auth.currentUser.uid + '/status').set({ online: false }).then(function() {
         window.__TAURI__.core.invoke('quit_app');
       });
-    });
-    window.__TAURI__.event.listen('notification', function() {
-      window.__TAURI__.core.invoke('show_window');
     });
   }
   setupNotificationListeners();
@@ -506,12 +509,13 @@ function appendMessage(msg, container) {
     content.appendChild(wrapper);
   }
 
+  var actions = createMsgActions(msg, row);
   if (isMine) {
+    row.appendChild(actions);
     row.appendChild(content);
-    row.appendChild(createMsgActions(msg, row));
   } else {
-    row.appendChild(createMsgActions(msg, row));
     row.appendChild(content);
+    row.appendChild(actions);
   }
   container.appendChild(row);
 }
@@ -520,52 +524,52 @@ function createMsgActions(msg, row) {
   var div = document.createElement('div');
   div.className = 'msg-actions';
 
+  var editSvg = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5z"/></svg>';
+  var deleteSvg = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h5a.5.5 0 01.5.5V4"/><path d="M3 4l1 10h8l1-10"/></svg>';
+  var replySvg = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l4-4M3 8l4 4"/><path d="M7 4h5a2 2 0 012 2v3"/></svg>';
+  var copySvg = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="9" height="9" rx="1"/><path d="M2 10.5V3a1 1 0 011-1h7.5"/></svg>';
+
   if (msg.senderId === currentUser.uid) {
-    // Edit (text only)
     if (msg.text) {
       var editBtn = document.createElement('button');
       editBtn.className = 'msg-action-btn';
-      editBtn.innerHTML = '&#9998;';
+      editBtn.innerHTML = editSvg;
       editBtn.title = 'Edit';
       editBtn.addEventListener('click', function(e) { e.stopPropagation(); editMessage(msg, row); });
       div.appendChild(editBtn);
     }
-    // Delete
     var delBtn = document.createElement('button');
     delBtn.className = 'msg-action-btn';
-    delBtn.innerHTML = '&#128465;';
+    delBtn.innerHTML = deleteSvg;
     delBtn.title = 'Delete';
     delBtn.addEventListener('click', function(e) { e.stopPropagation(); deleteMessage(msg); });
     div.appendChild(delBtn);
   } else {
-    // Reply for other messages
     var replyBtn = document.createElement('button');
     replyBtn.className = 'msg-action-btn';
-    replyBtn.innerHTML = '&#8617;';
+    replyBtn.innerHTML = replySvg;
     replyBtn.title = 'Reply';
     replyBtn.addEventListener('click', function(e) { e.stopPropagation(); replyToMessage(msg); });
     div.appendChild(replyBtn);
-    // Copy for other messages
     var copyBtn = document.createElement('button');
     copyBtn.className = 'msg-action-btn';
-    copyBtn.innerHTML = '&#128203;';
+    copyBtn.innerHTML = copySvg;
     copyBtn.title = 'Copy';
     copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyMessage(msg, false); });
     div.appendChild(copyBtn);
     return div;
   }
 
-  // Common actions for own messages
   var replyBtn = document.createElement('button');
   replyBtn.className = 'msg-action-btn';
-  replyBtn.innerHTML = '&#8617;';
+  replyBtn.innerHTML = replySvg;
   replyBtn.title = 'Reply';
   replyBtn.addEventListener('click', function(e) { e.stopPropagation(); replyToMessage(msg); });
   div.appendChild(replyBtn);
 
   var copyBtn = document.createElement('button');
   copyBtn.className = 'msg-action-btn';
-  copyBtn.innerHTML = '&#128203;';
+  copyBtn.innerHTML = copySvg;
   copyBtn.title = 'Copy';
   copyBtn.addEventListener('click', function(e) { e.stopPropagation(); copyMessage(msg, true); });
   div.appendChild(copyBtn);
@@ -624,8 +628,18 @@ function editMessage(msg, row) {
 }
 
 function deleteMessage(msg) {
-  if (!confirm('Delete this message?')) return;
-  var path = getMsgPath(msg._key);
+  _deleteMsgKey = msg._key;
+  document.getElementById('delete-message-modal').style.display = 'flex';
+}
+
+var _deleteMsgKey = null;
+
+function confirmDeleteMessage() {
+  var key = _deleteMsgKey;
+  _deleteMsgKey = null;
+  document.getElementById('delete-message-modal').style.display = 'none';
+  if (!key) return;
+  var path = getMsgPath(key);
   if (!path) return;
   db.ref(path).remove();
 }
@@ -895,16 +909,9 @@ function loadAllUsers() {
       div.className = 'sidebar-item';
       div.dataset.uid = child.key;
 
-      var status = relMap[child.key];
-      var badgeHtml = '';
-      if (blockedMap[child.key]) badgeHtml = '<span class="relationship-badge blocked">Blocked</span>';
-      else if (status === 'pending') badgeHtml = '<span class="relationship-badge pending">Pending</span>';
-      else if (status === 'request') badgeHtml = '<span class="relationship-badge request">Request</span>';
-      else if (status === 'accepted') badgeHtml = '<span class="relationship-badge friend">Friend</span>';
-
       var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
       var colour = userData.avatarColour || '#2d5da1';
-      div.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="sdot-' + child.key + '"></span></div><span>' + (userData.displayName || 'Unknown') + '</span>' + badgeHtml;
+      div.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="sdot-' + child.key + '"></span></div><span>' + (userData.displayName || 'Unknown') + '</span>';
       (function(uid) {
         div.addEventListener('click', function() { showUserProfile(uid); });
         db.ref('users/' + uid + '/status').on('value', function(snap) {
@@ -1422,7 +1429,7 @@ function loadGroups() {
 
       var delBtn = document.createElement('button');
       delBtn.className = 'dm-delete-btn';
-      delBtn.innerHTML = '&#128465;';
+      delBtn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h2a.5.5 0 01.5.5V4"/><path d="M12 4v9a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 013 13V4"/></svg>';
       delBtn.title = grp.creator === myUid ? 'Delete Group' : 'Leave Group';
       delBtn.addEventListener('click', function(e) {
         e.stopPropagation();
