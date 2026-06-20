@@ -27,3 +27,4 @@ tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
 open = "5"
 reqwest = { version = "0.12", features = ["blocking"] }
+winreg = "0.51"

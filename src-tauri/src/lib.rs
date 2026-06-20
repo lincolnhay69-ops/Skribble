@@ -1,5 +1,6 @@
 use tauri::{
     Emitter,
+    Listener,
     Manager,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
@@ -57,14 +58,53 @@ fn focus_window(app: &tauri::AppHandle) {
     }
 }
 
+fn register_startup() {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(run) = hkcu.open_subkey_with_flags(
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        winreg::enums::KEY_SET_VALUE,
+    ) {
+        if let Ok(exe) = std::env::current_exe() {
+            let path = exe.to_string_lossy().to_string() + " --tray";
+            let _ = run.set_value("Scribble", &path);
+        }
+    }
+}
+
+fn hide_to_tray(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(true);
+        let _ = window.minimize();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Check if launched with --tray flag (from startup registry)
+    let tray_start = std::env::args().any(|a| a == "--tray");
+
+    // Register startup entry on first run (idempotent)
+    register_startup();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_window(app);
         }))
         .plugin(tauri_plugin_notification::init())
-        .setup(|app| {
+        .setup(move |app| {
+            // On tray startup, immediately hide window
+            if tray_start {
+                hide_to_tray(app.handle());
+            }
+
+            // Listen for notification clicks in Rust as a fallback
+            let handle = app.handle().clone();
+            app.listen("notification", move |_event| {
+                focus_window(&handle);
+            });
+
             let open_item = MenuItemBuilder::with_id("open", "Show Scribble").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app)
