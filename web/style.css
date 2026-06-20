@@ -503,7 +503,7 @@ body {
   font-size: 1.2rem;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 980px) {
   .sidebar {
     display: none;
     position: fixed;
@@ -1029,7 +1029,7 @@ body {
 }
 
 /* Responsive: widen message bubbles on small screens */
-@media (max-width: 767px) {
+@media (max-width: 980px) {
   .msg-content {
     max-width: 75%;
   }
