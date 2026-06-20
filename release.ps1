@@ -36,8 +36,45 @@ if (-not $hasGh) {
     Write-Warning ""
 }
 
-# 4. Commit and push
-Write-Host "=== Committing and pushing to GitHub ===" -ForegroundColor Magenta
+# 3. Build
+$nsisDir = [System.IO.Path]::Combine($scriptRoot, "src-tauri", "target", "release", "bundle", "nsis")
+$msiDir = [System.IO.Path]::Combine($scriptRoot, "src-tauri", "target", "release", "bundle", "msi")
+$exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Where-Object { $_.Name -like "*$version*" } | Select-Object -First 1
+
+if (-not $exe) {
+    Write-Host "=== Building Scribble v$version ===" -ForegroundColor Magenta
+    Write-Host "This will take a while..." -ForegroundColor Gray
+    Set-Location $scriptRoot
+    npx tauri build
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed! Check the output above for errors."
+    }
+    Write-Host "Build successful!" -ForegroundColor Green
+    $exe = Get-ChildItem (Join-Path $nsisDir "*.exe") | Where-Object { $_.Name -like "*$version*" } | Select-Object -First 1
+} else {
+    Write-Host "Build artifacts found, skipping build..." -ForegroundColor Yellow
+}
+Write-Host ""
+
+# 4. Collect artifacts and generate download URL
+$msi = Get-ChildItem (Join-Path $msiDir "*.msi") | Select-Object -First 1
+
+if (-not $exe) {
+    throw "No .exe found in $nsisDir"
+}
+
+$exeName = $exe.Name
+$downloadUrl = "https://github.com/lincolnhay69-ops/Skribble/releases/download/v$version/$exeName"
+
+Write-Host "Build artifacts:" -ForegroundColor Cyan
+Write-Host "  EXE: $($exe.FullName)" -ForegroundColor Gray
+if ($msi) {
+    Write-Host "  MSI: $($msi.FullName)" -ForegroundColor Gray
+}
+Write-Host ""
+
+# 5. Commit
+Write-Host "=== Committing to GitHub ===" -ForegroundColor Magenta
 git -C $scriptRoot add .
 git -C $scriptRoot commit -m "Release v$version"
 if ($LASTEXITCODE -ne 0) {
