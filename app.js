@@ -6,6 +6,12 @@ var currentMsgQuery = null;
 var dmListVersion = 0;
 var ADMIN_UID = 'wVaQg5UcbIS1DavXddSMoMg8etB2';
 var selectedProfileUid = null;
+var isWindowFocused = true;
+
+if (window.__TAURI__) {
+  window.__TAURI__.event.listen('tauri://focus', function() { isWindowFocused = true; });
+  window.__TAURI__.event.listen('tauri://blur', function() { isWindowFocused = false; });
+}
 
 var channelIcons = {
   general: '<svg viewBox="0 0 16 16" width="16" height="16" style="vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5h12A1.5 1.5 0 0115.5 4v7a1.5 1.5 0 01-1.5 1.5H4l-2.5 2V4A1.5 1.5 0 012 2.5z"/></svg>',
@@ -199,7 +205,7 @@ function switchToChannel(channelId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, '#' + channelId);
@@ -265,7 +271,7 @@ function switchToDM(dmId, otherUserId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, msg.senderName);
@@ -414,12 +420,32 @@ function handleImageUpload(event) {
   event.target.value = '';
 }
 
+var _notifGranted = null;
+function ensureNotifPermission() {
+  if (_notifGranted !== null) return Promise.resolve(_notifGranted);
+  return window.__TAURI__.core.invoke('plugin:notification|is_permission_granted').then(function(granted) {
+    if (granted) { _notifGranted = true; return true; }
+    return window.__TAURI__.core.invoke('plugin:notification|request_permission').then(function(result) {
+      _notifGranted = (result === 'granted');
+      console.log('Notification permission requested, result:', result);
+      return _notifGranted;
+    });
+  }).catch(function(e) {
+    console.error('Permission check failed:', e);
+    return false;
+  });
+}
+
 function notifyMessage(msg, source) {
   if (!window.__TAURI__) return;
-  var title = "Scribble - " + source;
-  var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
-  window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
-    console.error('Notification failed:', e);
+  ensureNotifPermission().then(function(granted) {
+    if (!granted) { console.log('Notif skipped: permission not granted'); return; }
+    var title = "Scribble - " + source;
+    var body = (msg.senderName || "Someone") + ": " + (msg.text || "Image");
+    console.log('Sending notification:', title, body);
+    window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
+      console.error('Notification failed:', e);
+    });
   });
 }
 
@@ -817,7 +843,7 @@ function switchToGroup(groupId) {
       }
     });
 
-    if (document.hidden && newMsgs.length > 0) {
+    if (!isWindowFocused && newMsgs.length > 0) {
       newMsgs.forEach(function(msg) {
         if (msg.senderId !== currentUser.uid) {
           notifyMessage(msg, grp.name || 'Group');
