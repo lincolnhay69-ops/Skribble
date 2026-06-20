@@ -2052,7 +2052,7 @@ window.addEventListener('beforeunload', function() {
 });
 
 window.addEventListener('resize', function() {
-  if (window.innerWidth >= 768) {
+  if (window.innerWidth >= 981) {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebar-overlay').classList.remove('open');
   }
