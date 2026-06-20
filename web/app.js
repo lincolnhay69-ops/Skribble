@@ -1613,9 +1613,6 @@ function applyUISettings() {
   var scale = parseFloat(localStorage.getItem('uiScale')) || 1;
   if (scale !== 1) document.body.style.zoom = scale;
 
-  var iconColor = localStorage.getItem('iconColor');
-  if (iconColor) document.body.style.setProperty('--icon-color', iconColor);
-
   if (localStorage.getItem('dmCollapsed') === '1') {
     var list = document.getElementById('dm-list');
     var arrow = document.getElementById('dm-collapse-arrow');

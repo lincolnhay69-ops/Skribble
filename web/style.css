@@ -10,7 +10,6 @@
   --color-shadow: #2d2d2d;
   --font-heading: 'Kalam', cursive;
   --font-body: 'Patrick Hand', cursive;
-  --icon-color: var(--color-foreground);
 }
 
 body.dark {
@@ -840,13 +839,6 @@ body {
 #hamburger svg,
 #sidebar-logout svg,
 .btn svg,
-.uoptions-btn svg,
-.avatar-wrap svg,
-#dm-section-header svg,
-.sidebar-section-title svg {
-  color: var(--icon-color);
-}
-
 /* === USER OPTIONS MODAL === */
 #user-options-header .uoptions-avatar {
   border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
