@@ -94,7 +94,10 @@
       <div class="header">
         <div style="display:flex;align-items:center;gap:12px;">
           <button id="hamburger" onclick="toggleSidebar()">☰</button>
-          <span id="current-channel-name" style="font-family:'Kalam',cursive;font-size:1.5rem;"># general</span>
+          <div style="display:flex;flex-direction:column;">
+            <button id="current-channel-name" onclick="showChatStats()" style="background:none;border:none;cursor:pointer;font-family:'Kalam',cursive;font-size:1.5rem;text-align:left;padding:0;color:inherit;"># general</button>
+            <div id="typing-indicator" style="font-size:0.75rem;color:rgba(45,45,45,0.5);display:none;min-height:1em;"></div>
+          </div>
         </div>
         <div id="user-avatar" style="cursor:pointer;" onclick="window.location.href='profile.html'"></div>
       </div>
@@ -160,6 +163,15 @@
       <p id="join-group-error" style="color:var(--color-accent);display:none;margin-bottom:8px;font-size:0.85rem;"></p>
       <button class="btn" style="width:100%;margin-bottom:8px;" onclick="joinGroup()">Join Group</button>
       <button class="btn btn-secondary" style="width:100%;" onclick="hideJoinGroupModal()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="chat-stats-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)hideChatStats()">
+    <div class="card" style="width:90%;max-width:420px;padding:24px;" onclick="event.stopPropagation()">
+      <h3 id="stats-title" style="font-family:'Kalam',cursive;font-size:1.3rem;margin-bottom:8px;">Chat Stats</h3>
+      <p id="stats-created" style="font-size:0.85rem;color:rgba(45,45,45,0.6);margin-bottom:16px;"></p>
+      <div id="stats-body" style="max-height:300px;overflow-y:auto;font-size:0.9rem;"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:12px;" onclick="hideChatStats()">Close</button>
     </div>
   </div>
 

@@ -283,6 +283,9 @@ body {
   border: 3px solid var(--color-border);
   box-shadow: 4px 4px 0px 0px var(--color-shadow);
   object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .avatar-sm {
@@ -448,6 +451,22 @@ body {
   padding: 12px 16px;
   border-bottom: 2px dashed var(--color-border);
   background: var(--color-background);
+}
+
+#typing-indicator::after {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: typing-dot 1.2s infinite steps(1);
+}
+@keyframes typing-dot {
+  0%, 20% { opacity: 0; }
+  40% { opacity: 1; }
+  60%, 100% { opacity: 0; }
 }
 
 .message-area {
