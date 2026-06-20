@@ -833,12 +833,6 @@ body {
   text-align: center;
 }
 
-/* === ICON COLOR === */
-.sidebar-item svg,
-.window-btn svg,
-#hamburger svg,
-#sidebar-logout svg,
-.btn svg,
 /* === USER OPTIONS MODAL === */
 #user-options-header .uoptions-avatar {
   border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
