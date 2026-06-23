@@ -23,8 +23,11 @@ function signUp(email, password, displayName) {
         .then(function() {
           return db.ref('users/' + cred.user.uid).set({
             displayName: displayName,
+            avatarColour: '#2d5da1',
             email: email,
             photoURL: null,
+            lastNameChange: 0,
+            status: { online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP, focus: false },
             followers: {},
             following: {},
             createdAt: firebase.database.ServerValue.TIMESTAMP

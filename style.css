@@ -17,10 +17,39 @@ html, body {
 
 body.dark {
   --color-background: #121212;
-  --color-foreground: #d4d4d4;
+  --color-foreground: #ffffff;
   --color-muted: #2a2a2a;
-  --color-border: #999999;
+  --color-border: #333333;
   --color-white: #1e1e1e;
+  --color-sticky: #3d3520;
+  --color-shadow: transparent;
+}
+body.dark .sidebar {
+  --color-foreground: #ffffff;
+}
+body.dark .msg-bubble-other {
+  color: #000000;
+}
+body.dark .msg-bubble-mine {
+  color: #000000;
+}
+body.dark {
+  background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+}
+body.dark .title-bar {
+  color: #ffffff;
+}
+
+body.accent-mode {
+  --color-border: var(--user-colour, #2d5da1);
+  --color-secondary: var(--user-colour, #2d5da1);
+}
+body.accent-mode .sidebar-item.active {
+  border-left-color: var(--user-colour, #2d5da1);
+}
+body.accent-mode .btn:not(.btn-secondary):not(.btn-danger) {
+  background: var(--user-colour, #2d5da1);
+  border-color: var(--user-colour, #2d5da1);
 }
 
 * {
@@ -344,6 +373,7 @@ body {
   background-image: radial-gradient(var(--color-muted) 1px, transparent 1px);
   background-size: 24px 24px;
   border-bottom: 2px dashed var(--color-border);
+  color: #000000;
   user-select: none;
   flex-shrink: 0;
   -webkit-app-region: drag;
@@ -449,7 +479,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 0;
+  position: relative;
 }
 
 .message-list {
@@ -729,13 +759,15 @@ body {
 #dm-section-header:hover {
   opacity: 0.7;
 }
-#dm-section-header .collapse-arrow {
-  font-size: 0.7rem;
+#dm-section-header .collapse-arrow,
+#fr-section-header .collapse-arrow {
   margin-left: 4px;
   transition: transform 0.2s;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
-#dm-section-header .collapse-arrow.collapsed {
+#dm-section-header .collapse-arrow.collapsed,
+#fr-section-header .collapse-arrow.collapsed {
   transform: rotate(-90deg);
 }
 
@@ -760,27 +792,28 @@ body {
 /* === SETTINGS CARD === */
 .settings-card {
   text-align: left;
-  margin-bottom: 20px;
-}
-.settings-card label {
-  font-size: 0.9rem;
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 700;
-}
-.settings-card input[type="range"] {
-  width: 100%;
-  margin: 8px 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
 }
 .settings-card .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px dashed var(--color-muted);
 }
 .settings-card .setting-row:last-child {
   border-bottom: none;
+}
+.settings-card .setting-row label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.settings-card input[type="range"] {
+  width: 100%;
+  margin: 4px 0;
 }
 .color-picker-wrap {
   display: flex;
@@ -896,6 +929,16 @@ body {
   background: var(--color-sticky);
   border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
   transform: rotate(-0.5deg);
+  position: relative;
+}
+.msg-bubble-mine::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--user-colour, transparent);
+  opacity: 0.1;
+  border-radius: inherit;
+  pointer-events: none;
 }
 .msg-bubble-other {
   background: var(--color-white);
@@ -1025,7 +1068,63 @@ body {
   -webkit-user-drag: none;
 }
 
+#incoming-call-modal .avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#call-screen .avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#call-mute-btn.muted {
+  background: var(--color-accent) !important;
+  color: #fff;
+}
+
 /* Responsive: widen message bubbles on small screens */
+.games-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+}
+.games-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.game-card {
+  aspect-ratio: 1 / 1;
+  background: var(--color-sticky);
+  border: 2px solid var(--color-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  font-family: var(--font-body);
+  gap: 6px;
+}
+.game-card:hover {
+  transform: scale(1.05);
+  box-shadow: 3px 3px 0 var(--color-shadow);
+}
+.game-card-placeholder {
+  font-size: 2rem;
+  opacity: 0.4;
+}
+.game-card span {
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
 @media (max-width: 980px) {
   .msg-content {
     max-width: 75%;

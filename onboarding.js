@@ -145,6 +145,8 @@ function handleAuth() {
         return db.ref('users/' + result.user.uid).set({
           displayName: displayName,
           avatarColour: '#2d5da1',
+          lastNameChange: 0,
+          status: { online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP, focus: false },
           followers: {},
           following: {},
           createdAt: firebase.database.ServerValue.TIMESTAMP
@@ -201,7 +203,9 @@ function saveProfile() {
   updates.push(user.updateProfile({ displayName: name }));
   updates.push(db.ref('users/' + user.uid).update({
     displayName: name,
-    avatarColour: selectedColour
+    avatarColour: selectedColour,
+    lastNameChange: 0,
+    status: { online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP, focus: false }
   }));
 
   Promise.all(updates)
