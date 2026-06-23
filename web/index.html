@@ -17,6 +17,7 @@
   <div class="title-bar">
     <div class="title-bar-left">
       <img src="scribble logo.png" height="28" alt="Scribble">
+      <span style="font-size:0.75rem;opacity:0.5;margin-left:12px;white-space:nowrap;">tell your friends but not the teachers</span>
       <button class="window-btn" id="btn-darkmode" title="Dark mode" onclick="toggleDarkMode()">
         <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14">
           <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
@@ -111,7 +112,7 @@
         <div class="dot active"></div>
         <div class="dot" id="dot-3"></div>
       </div>
-      <button class="btn-primary" onclick="nextSlide()">Next &rarr;</button>
+      <button class="btn-primary" onclick="nextSlide()">Next <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;"><path d="M6 4l4 4-4 4"/></svg></button>
     </div>
     <button class="skip-link" onclick="goToScreen(4)">Skip</button>
   </div>
@@ -133,7 +134,7 @@
         <div class="dot" id="dot-2"></div>
         <div class="dot active"></div>
       </div>
-      <button class="btn-primary" onclick="nextSlide()">Next &rarr;</button>
+      <button class="btn-primary" onclick="nextSlide()">Next <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;"><path d="M6 4l4 4-4 4"/></svg></button>
     </div>
     <button class="skip-link" onclick="goToScreen(4)">Skip</button>
   </div>
@@ -177,7 +178,7 @@
       <div class="error-msg" id="auth-error"></div>
 
       <button class="btn-primary" id="auth-btn" onclick="handleAuth()">Create account</button>
-      <button class="auth-toggle" id="auth-toggle" onclick="toggleAuthMode()" style="margin-top:8px;">Already have one? Sign in &rarr;</button>
+      <button class="auth-toggle" id="auth-toggle" onclick="toggleAuthMode()" style="margin-top:8px;">Already have one? Sign in <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;"><path d="M6 4l4 4-4 4"/></svg></button>
     </div>
   </div>
 
@@ -206,7 +207,7 @@
   </div>
 
   <div class="screen" id="screen-6">
-    <div class="youre-in">&#10038; You're in. &#10038;</div>
+    <div class="youre-in"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align:middle;"><polygon points="8,1 10,5.5 15,6 11.5,9.5 12.5,15 8,12 3.5,15 4.5,9.5 1,6 6,5.5"/></svg> You're in. <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align:middle;"><polygon points="8,1 10,5.5 15,6 11.5,9.5 12.5,15 8,12 3.5,15 4.5,9.5 1,6 6,5.5"/></svg></div>
 
     <div id="confetti-container"></div>
   </div>

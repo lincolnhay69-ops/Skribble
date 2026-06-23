@@ -1,14 +1,109 @@
 var currentUser = null;
 var currentChannelId = null;
 var currentDmId = null;
+var currentDmPeerId = null;
 var currentGroupId = null;
 var currentMsgQuery = null;
 var currentTypingRef = null;
+var myUserColour = '#2d5da1';
 var dmListVersion = 0;
 var ADMIN_UID = 'wVaQg5UcbIS1DavXddSMoMg8etB2';
 var selectedProfileUid = null;
 var isWindowFocused = true;
 var friendRequestCount = 0;
+var nicknameCache = {};
+var renameTargetUid = null;
+var callState = 'IDLE';
+var currentCallId = null;
+var remotePeerId = null;
+var localStream = null;
+var remoteStream = null;
+var peerConnection = null;
+var callStartTime = null;
+var callTimerInterval = null;
+var _callStatusRef = null;
+var _callerIceRef = null;
+var _calleeIceRef = null;
+var _incomingCallRef = null;
+var _ringtoneCtx = null;
+var _ringtoneInterval = null;
+
+function getCallId(a, b) {
+  return [a, b].sort().join('_call_');
+}
+
+function getIceServers() {
+  return { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]};
+}
+
+function getFriendName(uid, fallback) {
+  return nicknameCache[uid] || fallback || 'Unknown';
+}
+
+function loadNicknames() {
+  db.ref('users/' + auth.currentUser.uid + '/nicknames').once('value', function(snapshot) {
+    if (snapshot.exists()) nicknameCache = snapshot.val();
+  });
+}
+
+function renameFriend(uid) {
+  renameTargetUid = uid;
+  var input = document.getElementById('rename-input');
+  input.value = nicknameCache[uid] || '';
+  document.getElementById('rename-modal').style.display = 'flex';
+  input.focus();
+  input.select();
+}
+
+function saveRename() {
+  var uid = renameTargetUid;
+  if (!uid) return;
+  var input = document.getElementById('rename-input');
+  var newName = input.value.trim();
+  var ref = db.ref('users/' + auth.currentUser.uid + '/nicknames/' + uid);
+  if (newName) {
+    ref.set(newName);
+    nicknameCache[uid] = newName;
+  } else {
+    ref.remove();
+    delete nicknameCache[uid];
+  }
+  document.getElementById('rename-modal').style.display = 'none';
+  loadDMs();
+  if (document.getElementById('user-options-modal').style.display === 'flex') showUserOptions(uid);
+  if (document.getElementById('profile-card') && selectedProfileUid === uid) showProfile(uid);
+  if (currentDmId) {
+    var otherId = currentDmId.split('_').filter(function(id) { return id !== auth.currentUser.uid; })[0];
+    if (otherId === uid) {
+      db.ref('users/' + otherId + '/displayName').once('value', function(snapshot) {
+        if (snapshot.exists()) {
+          var name = getFriendName(otherId, snapshot.val().displayName) || 'Unknown';
+          var callBtnHtml = '<span style="cursor:pointer;margin-left:8px;opacity:0.5;transition:opacity 0.15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" onclick="event.stopPropagation();startCall(\'' + otherId + '\')" title="Call">' +
+            '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M14.5 11.5c-2.5 2-5.5 3-8.5 3s-6-1-8.5-3a1 1 0 01-.3-1l1.5-2a1 1 0 011-.5l2 .5a1 1 0 01.6.7l.5 1.5"/>' +
+            '<path d="M11.7 9.2l.5-1.5a1 1 0 01.6-.7l2-.5a1 1 0 011 .5l1.5 2a1 1 0 01-.3 1"/>' +
+            '</svg></span>';
+          document.getElementById('current-channel-name').innerHTML = '<span>' + name + '</span>' + callBtnHtml;
+        }
+      });
+    }
+  }
+  if (document.querySelectorAll('#message-list .message-row').length > 0) {
+    document.querySelectorAll('#message-list .message-row').forEach(function(row) {
+      var sid = row.dataset.senderId;
+      if (sid === uid) {
+        var names = row.querySelectorAll('.msg-sender-name');
+        names.forEach(function(el) {
+          el.textContent = nicknameCache[uid] || el.dataset.originalName || el.textContent;
+          if (!el.dataset.originalName) el.dataset.originalName = el.textContent;
+        });
+      }
+    });
+  }
+}
 
 if (window.__TAURI__) {
   window.__TAURI__.event.listen('tauri://focus', function() {
@@ -45,20 +140,23 @@ function listenForFriendRequests() {
   db.ref('friendRequests').orderByChild('to').equalTo(myUid).on('value', function(snapshot) {
     var prevCount = friendRequestCount;
     friendRequestCount = 0;
+    var pendingReqs = [];
     var newestRequest = null;
-    var pendingFrom = [];
 
     snapshot.forEach(function(child) {
       var req = child.val();
+      req._key = child.key;
       if (req.status === 'pending') {
-        pendingFrom.push(req.from);
+        pendingReqs.push(req);
         if (!newestRequest || (req.createdAt || 0) > (newestRequest.createdAt || 0)) {
           newestRequest = req;
         }
       }
     });
 
-    if (pendingFrom.length === 0) {
+    if (pendingReqs.length === 0) {
+      friendRequestCount = 0;
+      renderFriendRequests([]);
       updateFriendBadge(0, null, prevCount, isWindowFocused);
       return;
     }
@@ -66,16 +164,46 @@ function listenForFriendRequests() {
     // Filter out blocked users
     db.ref('users/' + myUid + '/blocked').once('value', function(blockSnap) {
       var blockedMap = blockSnap.val() || {};
-      pendingFrom.forEach(function(fromUid) {
-        if (!blockedMap[fromUid]) friendRequestCount++;
-      });
+      var unblockedReqs = pendingReqs.filter(function(req) { return !blockedMap[req.from]; });
+      friendRequestCount = unblockedReqs.length;
+      renderFriendRequests(unblockedReqs);
       updateFriendBadge(friendRequestCount, newestRequest, prevCount, isWindowFocused);
     });
   });
 }
 
+function renderFriendRequests(requests) {
+  var list = document.getElementById('fr-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (requests.length === 0) { list.style.display = 'none'; return; }
+  list.style.display = '';
+  requests.forEach(function(req) {
+    db.ref('users/' + req.from + '/displayName').once('value', function(nameSnap) {
+      var name = nameSnap.val() || 'Unknown';
+      db.ref('users/' + req.from + '/avatarColour').once('value', function(colSnap) {
+        var colour = colSnap.val() || '#2d5da1';
+        var initial = name.charAt(0).toUpperCase();
+        var item = document.createElement('div');
+        item.className = 'sidebar-item';
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.gap = '8px';
+        item.style.padding = '6px 12px';
+        item.style.cursor = 'default';
+        item.innerHTML =
+          '<span class="avatar avatar-sm" style="background:' + colour + ';flex-shrink:0;">' + initial + '</span>' +
+          '<span style="flex:1;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + name + '</span>' +
+          '<button class="btn" style="padding:2px 8px;min-height:26px;font-size:0.7rem;" onclick="acceptFriendRequest(\'' + req.from + '\');event.stopPropagation();">✓</button>' +
+          '<button class="btn btn-secondary" style="padding:2px 8px;min-height:26px;font-size:0.7rem;" onclick="declineFriendRequest(\'' + req.from + '\');event.stopPropagation();">✗</button>';
+        list.appendChild(item);
+      });
+    });
+  });
+}
+
 function updateFriendBadge(count, newestRequest, prevCount, windowFocused) {
-  var badge = document.getElementById('friend-request-badge');
+  var badge = document.getElementById('fr-badge');
   if (badge) {
     if (count > 0) {
       badge.textContent = count > 99 ? '99+' : count;
@@ -85,8 +213,9 @@ function updateFriendBadge(count, newestRequest, prevCount, windowFocused) {
     }
   }
   if (newestRequest && count > prevCount && !windowFocused) {
-    db.ref('users/' + newestRequest.from + '/displayName').once('value', function(nameSnap) {
-      notifyMessage({ senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
+    var reqFrom = newestRequest.from;
+    db.ref('users/' + reqFrom + '/displayName').once('value', function(nameSnap) {
+      notifyMessage({ senderId: reqFrom, senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
     });
   }
 }
@@ -105,26 +234,449 @@ auth.onAuthStateChanged(function(user) {
   }
 });
 
+function renderSidebarAvatar() {
+  var avatarContainer = document.getElementById('user-avatar');
+  if (!avatarContainer) return;
+  db.ref('users/' + auth.currentUser.uid).once('value').then(function(snapshot) {
+    var data = snapshot.val() || {};
+    var displayName = data.displayName || auth.currentUser.displayName || '?';
+    var colour = data.avatarColour || '#2d5da1';
+    var initial = displayName.charAt(0).toUpperCase();
+    avatarContainer.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="cursor:pointer;background:' + colour + ';" onclick="window.location.href=\'profile.html\'">' + initial + '</span><span class="status-dot ' + (isWindowFocused ? 'online' : 'away') + '" id="own-status-dot"></span></div>';
+  });
+}
+
+function repairUserRecord() {
+  var uid = auth.currentUser.uid;
+  db.ref('users/' + uid).once('value').then(function(snapshot) {
+    var data = snapshot.val();
+    if (!data) {
+      db.ref('users/' + uid).set({
+        displayName: auth.currentUser.displayName || 'Unnamed',
+        avatarColour: '#2d5da1',
+        lastNameChange: 0,
+        accentEnabled: false,
+        status: { online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP, focus: false },
+        followers: {},
+        following: {},
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      myUserColour = '#2d5da1';
+      document.body.style.setProperty('--user-colour', '#2d5da1');
+      renderSidebarAvatar();
+      return;
+    }
+    myUserColour = data.avatarColour || '#2d5da1';
+    document.body.style.setProperty('--user-colour', myUserColour);
+    var updates = {};
+    var needsUpdate = false;
+    if (!data.avatarColour) { updates.avatarColour = '#2d5da1'; needsUpdate = true; }
+    if (!data.hasOwnProperty('lastNameChange')) { updates.lastNameChange = 0; needsUpdate = true; }
+    if (!data.status) { updates.status = { online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP, focus: false }; needsUpdate = true; }
+    if (!data.followers) { updates.followers = {}; needsUpdate = true; }
+    if (!data.following) { updates.following = {}; needsUpdate = true; }
+    if (!data.createdAt) { updates.createdAt = firebase.database.ServerValue.TIMESTAMP; needsUpdate = true; }
+    if (data.displayName && !auth.currentUser.displayName) {
+      auth.currentUser.updateProfile({ displayName: data.displayName });
+    }
+    if (data.accentEnabled) {
+      document.body.classList.add('accent-mode');
+    }
+    if (needsUpdate) {
+      db.ref('users/' + uid).update(updates);
+    }
+    renderSidebarAvatar();
+  });
+}
+
+// ===== VOICE CALLS =====
+function stopRingtone() {
+  if (_ringtoneInterval) { clearInterval(_ringtoneInterval); _ringtoneInterval = null; }
+  if (_ringtoneCtx) { _ringtoneCtx.close(); _ringtoneCtx = null; }
+}
+
+function playRingtone() {
+  stopRingtone();
+  _ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function beep() {
+    if (!_ringtoneCtx) return;
+    var osc = _ringtoneCtx.createOscillator();
+    var gain = _ringtoneCtx.createGain();
+    osc.connect(gain);
+    gain.connect(_ringtoneCtx.destination);
+    osc.frequency.value = 440;
+    gain.gain.setValueAtTime(0.3, _ringtoneCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, _ringtoneCtx.currentTime + 0.4);
+    osc.start();
+    osc.stop(_ringtoneCtx.currentTime + 0.4);
+  }
+  beep();
+  _ringtoneInterval = setInterval(beep, 800);
+}
+
+function createPeerConnection() {
+  var pc = new RTCPeerConnection(getIceServers());
+  pc.onicecandidate = function(event) {
+    if (event.candidate) {
+      var role = (callState === 'CALLING') ? 'callerCandidates' : 'calleeCandidates';
+      db.ref('call-ice/' + currentCallId + '/' + role).push().set(event.candidate.toJSON());
+    }
+  };
+  pc.ontrack = function(event) {
+    remoteStream = event.streams[0];
+  };
+  pc.oniceconnectionstatechange = function() {
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      if (callState !== 'CONNECTED') {
+        callState = 'CONNECTED';
+        db.ref('calls/' + currentCallId + '/status').set('connected');
+        db.ref('user-calls/' + auth.currentUser.uid + '/currentCall').set(currentCallId);
+        db.ref('user-calls/' + remotePeerId + '/currentCall').set(currentCallId);
+        showToast('Call connected');
+        document.getElementById('call-status-text').textContent = 'Connected';
+        startCallTimer();
+        showCallBar();
+      }
+    } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+      if (callState === 'CONNECTED' || callState === 'CONNECTING') {
+        showToast('Call disconnected');
+        cleanupCall();
+      }
+    }
+  };
+  peerConnection = pc;
+  return pc;
+}
+
+function listenForCallerIce() {
+  if (_callerIceRef) _callerIceRef.off();
+  _callerIceRef = db.ref('call-ice/' + currentCallId + '/callerCandidates');
+  _callerIceRef.on('child_added', function(snap) {
+    if (peerConnection && snap.key !== '_init') {
+      try { peerConnection.addIceCandidate(new RTCIceCandidate(snap.val())); } catch(e) {}
+    }
+  });
+  _callerIceRef.once('value', function(snap) {
+    if (!snap.hasChild('_init')) db.ref('call-ice/' + currentCallId + '/callerCandidates/_init').set(true);
+  });
+}
+
+function listenForCalleeIce() {
+  if (_calleeIceRef) _calleeIceRef.off();
+  _calleeIceRef = db.ref('call-ice/' + currentCallId + '/calleeCandidates');
+  _calleeIceRef.on('child_added', function(snap) {
+    if (peerConnection && snap.key !== '_init') {
+      try { peerConnection.addIceCandidate(new RTCIceCandidate(snap.val())); } catch(e) {}
+    }
+  });
+  _calleeIceRef.once('value', function(snap) {
+    if (!snap.hasChild('_init')) db.ref('call-ice/' + currentCallId + '/calleeCandidates/_init').set(true);
+  });
+}
+
+function listenForCallStatus() {
+  if (_callStatusRef) _callStatusRef.off();
+  _callStatusRef = db.ref('calls/' + currentCallId + '/status');
+  _callStatusRef.on('value', function(snap) {
+    var status = snap.val();
+    if (status === 'connecting' && callState === 'CALLING') {
+      db.ref('calls/' + currentCallId + '/calleeAnswer').once('value', function(answerSnap) {
+        var answer = answerSnap.val();
+        if (answer && peerConnection && !peerConnection.remoteDescription) {
+          peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+          listenForCalleeIce();
+        }
+      });
+    } else if (status === 'ended' || status === 'rejected' || status === 'missed') {
+      if (callState !== 'IDLE') {
+        var wasConnected = (callState === 'CONNECTED');
+        cleanupCall();
+        if (status === 'rejected') showToast('Call rejected');
+        else if (status === 'missed') showToast('Call not answered');
+        else if (wasConnected) showToast('Call ended');
+      }
+    }
+  });
+}
+
+function startCall(uid) {
+  if (callState !== 'IDLE') return;
+  if (uid === auth.currentUser.uid) return;
+  remotePeerId = uid;
+  currentCallId = getCallId(auth.currentUser.uid, uid);
+  callState = 'CALLING';
+
+  db.ref('user-calls/' + uid + '/currentCall').once('value', function(snap) {
+    if (snap.val()) {
+      showToast('User is in another call');
+      callState = 'IDLE'; currentCallId = null; remotePeerId = null;
+      return;
+    }
+
+    var screen = document.getElementById('call-screen');
+    if (screen) {
+      screen.style.display = 'flex';
+      screen.style.position = 'absolute';
+    }
+    document.getElementById('call-status-text').textContent = 'Calling...';
+
+    db.ref('users/' + uid).once('value', function(userSnap) {
+      var userData = userSnap.val() || {};
+      var name = getFriendName(uid, userData.displayName) || 'Unknown';
+      var colour = userData.avatarColour || '#2d5da1';
+      var avatar = document.getElementById('call-peer-avatar');
+      if (avatar) { avatar.style.background = colour; avatar.textContent = name.charAt(0).toUpperCase(); }
+      document.getElementById('call-peer-name').textContent = name;
+    });
+
+    var pc = createPeerConnection();
+    listenForCalleeIce();
+
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(function(stream) {
+      localStream = stream;
+      stream.getAudioTracks().forEach(function(track) { pc.addTrack(track, stream); });
+      return pc.createOffer();
+    }).then(function(offer) {
+      return pc.setLocalDescription(offer);
+    }).then(function() {
+      return db.ref('calls/' + currentCallId).set({
+        callerId: auth.currentUser.uid,
+        calleeId: uid,
+        type: 'audio',
+        status: 'ringing',
+        startedAt: firebase.database.ServerValue.TIMESTAMP,
+        callerOffer: { sdp: pc.localDescription.sdp, type: pc.localDescription.type }
+      });
+    }).then(function() {
+      return db.ref('user-calls/' + uid + '/incomingCall').set({
+        callId: currentCallId, callerId: auth.currentUser.uid
+      });
+    }).then(function() {
+      listenForCallStatus();
+      setTimeout(function() {
+        if (callState === 'CALLING') {
+          db.ref('calls/' + currentCallId + '/status').set('missed');
+          cleanupCall();
+          showToast('Call not answered');
+        }
+      }, 30000);
+    }).catch(function(err) {
+      showToast('Call failed: ' + err.message);
+      cleanupCall();
+    });
+  });
+}
+
+function incomingCall(data) {
+  if (callState !== 'IDLE') return;
+  var callId = data.callId;
+  var callerId = data.callerId;
+  currentCallId = callId;
+  remotePeerId = callerId;
+  callState = 'RINGING';
+
+  db.ref('users/' + callerId).once('value', function(snap) {
+    var userData = snap.val() || {};
+    var name = getFriendName(callerId, userData.displayName) || 'Unknown';
+    var colour = userData.avatarColour || '#2d5da1';
+    var avatar = document.getElementById('incoming-caller-avatar');
+    if (avatar) { avatar.style.background = colour; avatar.textContent = name.charAt(0).toUpperCase(); }
+    document.getElementById('incoming-caller-name').textContent = name;
+  });
+
+  var modal = document.getElementById('incoming-call-modal');
+  if (modal) modal.style.display = 'flex';
+
+  if (window.__TAURI__) {
+    window.__TAURI__.window.getCurrentWindow().setFocus();
+    window.__TAURI__.core.invoke('show_window').catch(function() {});
+    // Also fire a notification for incoming call
+    db.ref('users/' + callerId + '/displayName').once('value', function(nameSnap) {
+      var callerName = getFriendName(callerId, nameSnap.val() || 'Someone');
+      notifyMessage({ senderId: callerId, senderName: callerName, text: 'Incoming voice call...' }, 'Call');
+    });
+  }
+
+  playRingtone();
+
+  setTimeout(function() {
+    if (callState === 'RINGING') {
+      db.ref('calls/' + currentCallId + '/status').set('missed');
+      cleanupCall();
+    }
+  }, 30000);
+}
+
+function answerCall() {
+  if (callState !== 'RINGING') return;
+  callState = 'CONNECTING';
+  stopRingtone();
+  document.getElementById('incoming-call-modal').style.display = 'none';
+
+  var screen = document.getElementById('call-screen');
+  if (screen) {
+    screen.style.display = 'flex';
+    screen.style.position = 'fixed';
+  }
+  document.getElementById('call-status-text').textContent = 'Connecting...';
+
+  db.ref('users/' + remotePeerId).once('value', function(userSnap) {
+    var userData = userSnap.val() || {};
+    var name = getFriendName(remotePeerId, userData.displayName) || 'Unknown';
+    var colour = userData.avatarColour || '#2d5da1';
+    var avatar = document.getElementById('call-peer-avatar');
+    if (avatar) { avatar.style.background = colour; avatar.textContent = name.charAt(0).toUpperCase(); }
+    document.getElementById('call-peer-name').textContent = name;
+  });
+
+  var pc = createPeerConnection();
+
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(function(stream) {
+    localStream = stream;
+    stream.getAudioTracks().forEach(function(track) { pc.addTrack(track, stream); });
+    return db.ref('calls/' + currentCallId + '/callerOffer').once('value');
+  }).then(function(offerSnap) {
+    var offer = offerSnap.val();
+    if (!offer) throw new Error('No offer found');
+    return pc.setRemoteDescription(new RTCSessionDescription(offer));
+  }).then(function() {
+    return pc.createAnswer();
+  }).then(function(answer) {
+    return pc.setLocalDescription(answer).then(function() {
+      return db.ref('calls/' + currentCallId + '/calleeAnswer').set({
+        sdp: answer.sdp, type: answer.type
+      });
+    });
+  }).then(function() {
+    return db.ref('calls/' + currentCallId + '/status').set('connecting');
+  }).then(function() {
+    listenForCallerIce();
+    listenForCallStatus();
+  }).catch(function(err) {
+    showToast('Failed to answer: ' + err.message);
+    cleanupCall();
+  });
+}
+
+function rejectCall() {
+  if (callState !== 'RINGING') return;
+  stopRingtone();
+  db.ref('calls/' + currentCallId + '/status').set('rejected');
+  cleanupCall();
+}
+
+function hangUp() {
+  if (!currentCallId) { cleanupCall(); return; }
+  db.ref('calls/' + currentCallId + '/status').set('ended');
+  cleanupCall();
+}
+
+function minimizeCall() {
+  document.getElementById('call-screen').style.display = 'none';
+  document.getElementById('call-header-bar').style.display = 'flex';
+  var name = document.getElementById('call-peer-name');
+  if (name) document.getElementById('call-header-name').textContent = name.textContent;
+  var timer = document.getElementById('call-timer');
+  if (timer) document.getElementById('call-header-timer').textContent = timer.textContent;
+}
+
+function focusCallScreen() {
+  document.getElementById('call-header-bar').style.display = 'none';
+  document.getElementById('call-screen').style.display = 'flex';
+}
+
+function cleanupCall() {
+  stopRingtone();
+  if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
+  if (_callStatusRef) { _callStatusRef.off(); _callStatusRef = null; }
+  if (_callerIceRef) { _callerIceRef.off(); _callerIceRef = null; }
+  if (_calleeIceRef) { _calleeIceRef.off(); _calleeIceRef = null; }
+
+  if (currentCallId && auth.currentUser) {
+    var myUid = auth.currentUser.uid;
+    db.ref('user-calls/' + myUid + '/incomingCall').remove();
+    db.ref('user-calls/' + myUid + '/currentCall').remove();
+    if (remotePeerId) db.ref('user-calls/' + remotePeerId + '/currentCall').remove();
+  }
+
+  if (localStream) { localStream.getTracks().forEach(function(t) { t.stop(); }); localStream = null; }
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  remoteStream = null;
+  callState = 'IDLE';
+  currentCallId = null;
+  remotePeerId = null;
+  callStartTime = null;
+
+  document.getElementById('incoming-call-modal').style.display = 'none';
+  document.getElementById('call-screen').style.display = 'none';
+  document.getElementById('call-header-bar').style.display = 'none';
+  document.getElementById('call-timer').textContent = '00:00';
+  document.getElementById('call-header-timer').textContent = '00:00';
+}
+
+function startCallTimer() {
+  callStartTime = Date.now();
+  var el = document.getElementById('call-timer');
+  if (!el) return;
+  if (callTimerInterval) clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(function() {
+    var elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+    var mins = Math.floor(elapsed / 60);
+    var secs = elapsed % 60;
+    var text = (mins < 10 ? '0' + mins : mins) + ':' + (secs < 10 ? '0' + secs : secs);
+    el.textContent = text;
+    var ht = document.getElementById('call-header-timer');
+    if (ht) ht.textContent = text;
+  }, 1000);
+}
+
+function toggleMute() {
+  if (localStream) {
+    var tracks = localStream.getAudioTracks();
+    var muted = tracks.length > 0 && tracks[0].enabled;
+    tracks.forEach(function(t) { t.enabled = muted; });
+    var btn = document.getElementById('call-mute-btn');
+    if (btn) {
+      btn.classList.toggle('muted', !muted);
+      btn.title = muted ? 'Unmute' : 'Mute';
+    }
+  }
+}
+
+function initCallListeners() {
+  if (!auth.currentUser) return;
+  var myUid = auth.currentUser.uid;
+  if (_incomingCallRef) _incomingCallRef.off();
+  _incomingCallRef = db.ref('user-calls/' + myUid + '/incomingCall');
+  _incomingCallRef.on('value', function(snap) {
+    var data = snap.val();
+    if (data && data.callId) {
+      db.ref('calls/' + data.callId + '/status').once('value', function(statusSnap) {
+        if (statusSnap.val() === 'ringing' && callState === 'IDLE') {
+          incomingCall(data);
+        }
+      });
+    }
+  });
+}
+
 function initApp() {
   seedChannels();
   updateOnlineStatus();
-
-  var avatarContainer = document.getElementById('user-avatar');
-  if (avatarContainer && currentUser.displayName) {
-    db.ref('users/' + currentUser.uid + '/avatarColour').once('value', function(snapshot) {
-      var colour = snapshot.val() || '#2d5da1';
-      avatarContainer.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="cursor:pointer;background:' + colour + ';" onclick="window.location.href=\'profile.html\'">' + currentUser.displayName.charAt(0).toUpperCase() + '</span><span class="status-dot ' + (isWindowFocused ? 'online' : 'away') + '" id="own-status-dot"></span></div>';
-    });
-  }
+  repairUserRecord();
+  loadNicknames();
+  initCallListeners();
 
   loadChannels();
   loadDMs();
   loadGroups();
   reportVersion();
+  autoUpdateOnLaunch();
   applyUISettings();
   showReleaseNotes();
   if (window.__TAURI__) {
     window.__TAURI__.event.listen('before-quit', function() {
+      if (currentCallId) { db.ref('calls/' + currentCallId + '/status').set('ended'); cleanupCall(); }
       db.ref('users/' + auth.currentUser.uid + '/status').set({ online: false }).then(function() {
         window.__TAURI__.core.invoke('quit_app');
       });
@@ -222,9 +774,10 @@ function loadDMs() {
           var userData = userSnapshot.val();
           var div = document.createElement('div');
           div.className = 'sidebar-item' + (currentDmId === dmId ? ' active' : '');
-          var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
+          var dmDisplayName = getFriendName(otherId, userData.displayName);
+          var initial = dmDisplayName ? dmDisplayName.charAt(0).toUpperCase() : '?';
           var colour = userData.avatarColour || '#2d5da1';
-          div.innerHTML = '<div class="avatar-wrap" onclick="event.stopPropagation();showUserOptions(\'' + otherId + '\')" style="cursor:pointer;"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="dot-' + otherId + '"></span></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="switchToDM(\'' + dmId + '\',\'' + otherId + '\')">' + (userData.displayName || 'Unknown') + '</span>';
+          div.innerHTML = '<div class="avatar-wrap" onclick="event.stopPropagation();showUserOptions(\'' + otherId + '\')" style="cursor:pointer;"><span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.8rem;background:' + colour + ';">' + initial + '</span><span class="status-dot offline" id="dot-' + otherId + '"></span></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="switchToDM(\'' + dmId + '\',\'' + otherId + '\')">' + dmDisplayName + '</span>';
           div.dataset.dmId = dmId;
 
           // Status listener
@@ -239,14 +792,14 @@ function loadDMs() {
             });
           })(otherId);
 
-          (function(div, key, otherName) {
+          (function(div, key, otherId, otherName) {
             var del = document.createElement('button');
             del.className = 'dm-delete-btn';
             del.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5 4V2.5A.5.5 0 015.5 2h2a.5.5 0 01.5.5V4"/><path d="M12 4v9a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 013 13V4"/></svg>';
             del.addEventListener('click', function(e) { e.stopPropagation(); deleteDM(key); });
             div.appendChild(del);
             // Real-time badge updates for future messages
-            (function(k, n) {
+            (function(k, oid, n) {
               var lr = parseInt(localStorage.getItem('lastRead_' + k)) || 0;
               db.ref('dms/' + k + '/messages').orderByChild('createdAt').startAt(lr + 1).on('child_added', function(ms) {
                 if (k === currentDmId) return;
@@ -263,17 +816,18 @@ function loadDMs() {
                   div.appendChild(badge);
                 }
                 if (!isWindowFocused) {
+                  var title = getFriendName(oid, n);
                   if (m.ciphertext) {
                     decryptMsgInPlace(m, 'dm_' + k).then(function() {
-                      notifyMessage(m, n);
+                      notifyMessage(m, title);
                     });
                   } else {
-                    notifyMessage(m, n);
+                    notifyMessage(m, title);
                   }
                 }
               });
             })(key, otherName);
-          })(div, dmId, userData.displayName || 'Unknown');
+          })(div, dmId, otherId, userData.displayName || 'Unknown');
 
           return div;
         })
@@ -289,7 +843,11 @@ function loadDMs() {
 function switchToChannel(channelId) {
   currentChannelId = channelId;
   currentDmId = null;
+  currentDmPeerId = null;
   currentGroupId = null;
+  removeGroupMembersBtn();
+  var callBtn = document.getElementById('dm-call-btn');
+  if (callBtn) callBtn.style.display = 'none';
 
   if (currentMsgQuery) { currentMsgQuery.off(); }
 
@@ -371,8 +929,10 @@ function switchToChannel(channelId) {
 
 function switchToDM(dmId, otherUserId) {
   currentDmId = dmId;
+  currentDmPeerId = otherUserId;
   currentChannelId = null;
   currentGroupId = null;
+  removeGroupMembersBtn();
 
   if (currentMsgQuery) { currentMsgQuery.off(); }
 
@@ -382,9 +942,13 @@ function switchToDM(dmId, otherUserId) {
   if (badgeEl) badgeEl.remove();
   startTypingListener('dms/' + dmId);
 
+  var callBtn = document.getElementById('dm-call-btn');
+  if (callBtn) callBtn.style.display = 'inline-flex';
+
   db.ref('users/' + otherUserId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
-      document.getElementById('current-channel-name').textContent = snapshot.val().displayName || 'Unknown';
+      var name = getFriendName(otherUserId, snapshot.val().displayName) || 'Unknown';
+      document.getElementById('current-channel-name').innerHTML = '<span>' + name + '</span>';
     }
   });
 
@@ -433,7 +997,7 @@ function switchToDM(dmId, otherUserId) {
       if (!isWindowFocused && newMsgs.length > 0) {
         newMsgs.forEach(function(msg) {
           if (msg.senderId !== currentUser.uid) {
-            notifyMessage(msg, msg.senderName);
+            notifyMessage(msg, getFriendName(msg.senderId, msg.senderName));
           }
         });
       }
@@ -460,6 +1024,11 @@ function updateSidebarActive() {
     document.querySelectorAll('#channel-list .sidebar-item').forEach(function(el) {
       if (el.dataset.channelId === currentChannelId) el.classList.add('active');
     });
+  } else {
+    var gamesEl = document.getElementById('sidebar-games');
+    if (gamesEl && document.getElementById('games-grid').style.display !== 'none') {
+      gamesEl.classList.add('active');
+    }
   }
 }
 
@@ -481,7 +1050,7 @@ function appendMessage(msg, container) {
     if (!isMine && (currentChannelId || currentGroupId)) {
       var name = document.createElement('div');
       name.className = 'msg-sender-name';
-      name.textContent = msg.senderName;
+      name.textContent = getFriendName(msg.senderId, msg.senderName);
       bubble.appendChild(name);
     }
 
@@ -495,7 +1064,7 @@ function appendMessage(msg, container) {
     if (!isMine && (currentChannelId || currentGroupId)) {
       var name = document.createElement('div');
       name.className = 'msg-sender-name';
-      name.textContent = msg.senderName;
+      name.textContent = getFriendName(msg.senderId, msg.senderName);
       content.appendChild(name);
     }
     var wrapper = document.createElement('div');
@@ -647,7 +1216,7 @@ function confirmDeleteMessage() {
 function replyToMessage(msg) {
   var input = document.getElementById('message-input');
   if (!input) return;
-  var prefix = '@' + (msg.senderName || 'Unknown') + ': ' + (msg.text || '');
+  var prefix = '@' + getFriendName(msg.senderId, msg.senderName || 'Unknown') + ': ' + (msg.text || '');
   input.value = prefix + (input.value ? ' ' + input.value : '');
   input.focus();
 }
@@ -657,7 +1226,7 @@ function copyMessage(msg, isOwn) {
   if (isOwn) {
     text = msg.text || '';
   } else {
-    text = (msg.senderName || 'Unknown') + ': ' + (msg.text || '');
+    text = getFriendName(msg.senderId, msg.senderName || 'Unknown') + ': ' + (msg.text || '');
   }
   if (!text) {
     showToast('Nothing to copy');
@@ -702,6 +1271,37 @@ function decryptMsgInPlace(msg, convPath) {
   });
 }
 
+// ===== SPAM PROTECTION =====
+
+var spamTimestamps = [];
+var spamTier = 0;
+var spamCooldownUntil = 0;
+
+function checkSpam(text) {
+  var wordCount = text.trim().split(/\s+/).length;
+  if (wordCount > 250) {
+    showToast('Message too long (max 250 words)');
+    return false;
+  }
+  var now = Date.now();
+  if (now < spamCooldownUntil) {
+    var secs = Math.ceil((spamCooldownUntil - now) / 1000);
+    showToast('Slow down! Cooldown: ' + secs + 's');
+    return false;
+  }
+  spamTimestamps = spamTimestamps.filter(function(t) { return now - t < 5000; });
+  spamTimestamps.push(now);
+  if (spamTimestamps.length >= 5) {
+    spamTier = Math.min(spamTier + 1, 3);
+    var durations = [0, 30000, 60000, 300000];
+    spamCooldownUntil = now + durations[spamTier];
+    spamTimestamps = [];
+    showToast('Spam detected! Cooldown: ' + (durations[spamTier] / 1000) + 's');
+    return false;
+  }
+  return true;
+}
+
 function sendMessage() {
   var input = document.getElementById('message-input');
   var text = input.value.trim();
@@ -713,6 +1313,31 @@ function sendMessage() {
     return;
   }
 
+  // Spam protection
+  if (!checkSpam(text)) { input.value = ''; return; }
+
+  // Group ban check
+  if (currentGroupId) {
+    db.ref('groups/' + currentGroupId + '/banned/' + auth.currentUser.uid).once('value').then(function(snap) {
+      if (snap.exists()) {
+        var ban = snap.val();
+        if (ban.expiresAt === 0 || ban.expiresAt > Date.now()) {
+          showToast('You are banned from this group.');
+          return;
+        }
+        // Expired ban - continue sending
+        doSendMessage(text);
+      } else {
+        doSendMessage(text);
+      }
+    });
+  } else {
+    doSendMessage(text);
+  }
+}
+
+function doSendMessage(text) {
+  var input = document.getElementById('message-input');
   var convPath = getConvPath();
   encryptMessage(text, convPath).then(function(encrypted) {
     var msg = {
@@ -816,7 +1441,7 @@ function notifyMessage(msg, source) {
   ensureNotifPermission().then(function(granted) {
     if (!granted) { console.log('Notif skipped: permission not granted'); return; }
     var title = "Scribble - " + source;
-    var body = (msg.senderName || "Someone") + ": " + (msg.text || (msg.imageData ? "Image" : (msg.ciphertext ? "Encrypted message" : "Image")));
+    var body = getFriendName(msg.senderId, msg.senderName || "Someone") + ": " + (msg.text || (msg.imageData ? "Image" : (msg.ciphertext ? "Encrypted message" : "Image")));
     console.log('Sending notification:', title, body);
     window.__TAURI__.core.invoke('notify', { title: title, body: body }).catch(function(e) {
       console.error('Notification failed:', e);
@@ -858,10 +1483,52 @@ function toggleDMList() {
   localStorage.setItem('dmCollapsed', collapsed ? '0' : '1');
 }
 
+function toggleFRList() {
+  var list = document.getElementById('fr-list');
+  var arrow = document.getElementById('fr-collapse-arrow');
+  var collapsed = list.style.display === 'none';
+  list.style.display = collapsed ? 'block' : 'none';
+  if (arrow) arrow.classList.toggle('collapsed', !collapsed);
+  localStorage.setItem('frCollapsed', collapsed ? '0' : '1');
+}
+
 function logoutFromSidebar() {
   auth.signOut().then(function() {
     window.location.href = 'signin.html';
   });
+}
+
+function openGameEmbed(url) {
+  if (!url || url === 'about:blank') { showToast('Game URL not set yet'); return; }
+  document.getElementById('game-embed-title').textContent = 'Game';
+  document.getElementById('game-iframe').src = url;
+  document.getElementById('game-embed-modal').style.display = 'flex';
+}
+
+function closeGameEmbed() {
+  document.getElementById('game-embed-modal').style.display = 'none';
+  document.getElementById('game-iframe').src = 'about:blank';
+}
+
+function showGamesGrid() {
+  currentChannelId = null;
+  currentDmId = null;
+  currentDmPeerId = null;
+  currentGroupId = null;
+  var callBtn = document.getElementById('dm-call-btn');
+  if (callBtn) callBtn.style.display = 'none';
+  if (currentMsgQuery) { currentMsgQuery.off(); currentMsgQuery = null; }
+  if (currentTypingRef) { currentTypingRef.off(); currentTypingRef = null; }
+  document.getElementById('message-list').style.display = 'none';
+  document.getElementById('games-grid').style.display = 'flex';
+  document.getElementById('games-grid').style.flexDirection = 'column';
+  document.getElementById('input-bar').style.display = 'none';
+  document.getElementById('readonly-notice').style.display = 'none';
+  document.getElementById('typing-indicator').style.display = 'none';
+  document.getElementById('current-channel-name').textContent = '🎮 Games';
+  document.getElementById('current-channel-name').onclick = null;
+  removeGroupMembersBtn();
+  updateSidebarActive();
 }
 
 function showNewDMModal() {
@@ -1011,7 +1678,8 @@ function showUserProfile(uid) {
       if (child.key === requestId_them) theirRequest = child.val();
     });
 
-    var initial = userData.displayName ? userData.displayName.charAt(0).toUpperCase() : '?';
+    var displayName = getFriendName(uid, userData.displayName);
+    var initial = displayName ? displayName.charAt(0).toUpperCase() : '?';
     var followerCount = userData.followers ? Object.keys(userData.followers).length : 0;
     var followingCount = userData.following ? Object.keys(userData.following).length : 0;
     var avatarColour = userData.avatarColour || '#2d5da1';
@@ -1044,6 +1712,7 @@ function showUserProfile(uid) {
       actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     } else if ((myRequest && myRequest.status === 'accepted') || (theirRequest && theirRequest.status === 'accepted')) {
       actionsHtml = '<button class="btn friend-btn" style="background:var(--color-secondary);color:#fff;" onclick="startDM(\'' + uid + '\')">Message</button>';
+      actionsHtml += '<button class="btn friend-btn" style="background:var(--color-accent);color:#fff;" onclick="startCall(\'' + uid + '\')">Call</button>';
       actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="unfriend(\'' + uid + '\')">Unfriend</button>';
       actionsHtml += '<button class="btn btn-secondary friend-btn" onclick="blockUser(\'' + uid + '\')">Block</button>';
     } else {
@@ -1055,9 +1724,10 @@ function showUserProfile(uid) {
 
     var msgCountHtml = '<div class="profile-stats"><div class="stat"><div class="num" id="pcard-msgs">...</div><div class="label">messages</div></div><div class="stat"><div class="num">' + followingCount + '</div><div class="label">following</div></div><div class="stat"><div class="num">' + followerCount + '</div><div class="label">followers</div></div></div>';
 
+    var pencilSvg = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5z"/></svg>';
     profileCard.innerHTML =
       '<div class="avatar avatar-lg avatar-fallback" style="background:' + avatarColour + ';width:64px;height:64px;font-size:1.8rem;margin-bottom:8px;">' + initial + '</div>' +
-      '<h3>' + (userData.displayName || 'Unknown') + '</h3>' +
+      '<div style="display:flex;align-items:center;justify-content:center;gap:6px;"><h3 style="margin:0;">' + displayName + '</h3><span style="cursor:pointer;opacity:0.4;transition:opacity 0.15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4" onclick="renameFriend(\'' + uid + '\')">' + pencilSvg + '</span></div>' +
       '<p class="profile-email">' + (userData.email || '') + '</p>' +
       msgCountHtml +
       actionsHtml;
@@ -1244,16 +1914,20 @@ function showUserOptions(uid) {
     var theirReq = results[2].val();
     var blocked = results[3].val();
 
-    var initial = (userData.displayName || '?').charAt(0).toUpperCase();
+    var optionsDisplayName = getFriendName(uid, userData.displayName);
+    var initial = (optionsDisplayName || '?').charAt(0).toUpperCase();
     var colour = userData.avatarColour || '#2d5da1';
 
-    header.innerHTML = '<div class="uoptions-avatar" style="background:' + colour + ';">' + initial + '</div><div class="uoptions-name">' + (userData.displayName || 'Unknown') + '</div>';
+    header.innerHTML = '<div class="uoptions-avatar" style="background:' + colour + ';">' + initial + '</div><div class="uoptions-name">' + optionsDisplayName + '</div>';
 
     var html = '';
     var isFriend = (myReq && myReq.status === 'accepted') || (theirReq && theirReq.status === 'accepted');
 
-    // Message button
-    html += '<button class="btn uoptions-btn" onclick="startDMFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2.5h12A1.5 1.5 0 0115.5 4v7a1.5 1.5 0 01-1.5 1.5H4l-2.5 2V4A1.5 1.5 0 012 2.5z"/></svg> Message</button>';
+    // Call button
+    html += '<button class="btn uoptions-btn" onclick="callFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 11.5c-2.5 2-5.5 3-8.5 3s-6-1-8.5-3a1 1 0 01-.3-1l1.5-2a1 1 0 011-.5l2 .5a1 1 0 01.6.7l.5 1.5"/><path d="M11.7 9.2l.5-1.5a1 1 0 01.6-.7l2-.5a1 1 0 011 .5l1.5 2a1 1 0 01-.3 1"/></svg> Call</button>';
+
+    // Rename button
+    html += '<button class="btn btn-secondary uoptions-btn" onclick="renameFromOptions()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5z"/></svg> Rename</button>';
 
     if (isFriend) {
       html += '<button class="btn btn-secondary uoptions-btn" onclick="unfriendFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 8.5L12.5 11M12.5 8.5L10 11"/></svg> Unfriend</button>';
@@ -1269,7 +1943,7 @@ function showUserOptions(uid) {
     html += '<button class="btn btn-secondary uoptions-btn" onclick="createGroupFromOptions()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 7h4M12 5v4"/></svg> Create Group</button>';
 
     // Add to group
-    html += '<button class="btn btn-secondary uoptions-btn" onclick="toggleAddToGroupList()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 6h4M12 4v4"/></svg> Add to Group <span style="margin-left:auto;">▸</span></button>';
+    html += '<button class="btn btn-secondary uoptions-btn" onclick="toggleAddToGroupList()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a2 2 0 100-4 2 2 0 000 4z"/><path d="M2 14v-1a3 3 0 013-3h2a3 3 0 013 3v1"/><path d="M10 6h4M12 4v4"/></svg> Add to Group <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-left:auto;"><path d="M6 4l4 4-4 4"/></svg></button>';
     html += '<div class="uoptions-group-list" id="uoptions-group-list"><p id="uoptions-groups-placeholder">Loading...</p></div>';
 
     buttons.innerHTML = html;
@@ -1291,6 +1965,20 @@ function startDMFromOptions() {
   var dmId = ids.join('_');
   hideUserOptions();
   switchToDM(dmId, uid);
+}
+
+function callFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  startCall(uid);
+}
+
+function renameFromOptions() {
+  var uid = _userOptionsUid;
+  if (!uid) return;
+  hideUserOptions();
+  renameFriend(uid);
 }
 
 function unfriendFromOptions() {
@@ -1327,6 +2015,7 @@ function createGroupFromOptions() {
   var groupData = {
     name: name,
     createdBy: myUid,
+    creator: myUid,
     joinCode: code,
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     members: {}
@@ -1502,6 +2191,9 @@ function switchToGroup(groupId) {
   currentGroupId = groupId;
   currentChannelId = null;
   currentDmId = null;
+  currentDmPeerId = null;
+  var callBtn = document.getElementById('dm-call-btn');
+  if (callBtn) callBtn.style.display = 'none';
 
   if (currentMsgQuery) { currentMsgQuery.off(); }
 
@@ -1513,12 +2205,52 @@ function switchToGroup(groupId) {
 
   var groupConvPath = 'group_' + groupId;
   var groupName = 'Group';
+  var myUid = auth.currentUser.uid;
+
   db.ref('groups/' + groupId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
       var data = snapshot.val();
       groupName = data.name || 'Group';
       var code = data.joinCode;
-      document.getElementById('current-channel-name').innerHTML = groupIcon + ' ' + groupName + (code ? ' <span style="font-size:0.8rem;opacity:0.6;margin-left:8px;">Code: ' + code + '</span>' : '');
+      var isAdmin = (data.creator === myUid || myUid === ADMIN_UID);
+      var memberCount = data.members ? Object.keys(data.members).length : 0;
+
+      var headerHtml = groupIcon + ' ' + groupName + (code ? ' <span style="font-size:0.8rem;opacity:0.6;margin-left:8px;">Code: ' + code + '</span>' : '');
+      document.getElementById('current-channel-name').innerHTML = headerHtml;
+
+      // Add members button outside current-channel-name to avoid click bubbling with showChatStats
+      var membersBtnId = 'gm-btn-' + groupId.replace(/[^a-zA-Z0-9]/g, '_');
+      var existing = document.getElementById(membersBtnId);
+      if (existing) existing.remove();
+      var membersBtn = document.createElement('button');
+      membersBtn.id = membersBtnId;
+      membersBtn.className = 'btn btn-secondary';
+      membersBtn.style.cssText = 'padding:2px 20px;font-size:0.7rem;min-height:auto;vertical-align:middle;';
+      membersBtn.textContent = memberCount + ' members';
+      membersBtn.onclick = function(e) { e.stopPropagation(); showGroupMembers(groupId); };
+      var nameContainer = document.getElementById('current-channel-name').parentNode;
+      if (isAdmin) {
+        nameContainer.parentNode.insertBefore(membersBtn, nameContainer.nextSibling);
+      }
+
+      // Check if current user is banned
+      var bannedMap = data.banned || {};
+      var banInfo = bannedMap[myUid];
+      if (banInfo) {
+        var banActive = false;
+        if (banInfo.expiresAt === 0) {
+          banActive = true;
+        } else if (banInfo.expiresAt > Date.now()) {
+          banActive = true;
+        }
+        if (banActive) {
+          var msgList = document.getElementById('message-list');
+          msgList.innerHTML = '<p class="text-center" style="padding:40px;color:var(--color-accent);">You are banned from this group.</p>';
+          document.getElementById('input-bar').style.display = 'none';
+          if (currentMsgQuery) { currentMsgQuery.off(); }
+          return;
+        }
+      }
     }
   });
 
@@ -1598,6 +2330,7 @@ function createGroup() {
   var groupData = {
     name: name,
     createdBy: myUid,
+    creator: myUid,
     joinCode: code,
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     members: {}
@@ -1690,7 +2423,7 @@ function startTypingListener(basePath) {
     var resolved = [];
     var pending = names.map(function(id) {
       return db.ref('users/' + id + '/displayName').once('value').then(function(snap) {
-        resolved.push(snap.val() || 'Someone');
+        resolved.push(getFriendName(id, snap.val() || 'Someone'));
       });
     });
     Promise.all(pending).then(function() {
@@ -1755,7 +2488,7 @@ function showChatStats() {
     var uidOrder = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; });
     var pendingNames = uidOrder.map(function(id) {
       return db.ref('users/' + id + '/displayName').once('value').then(function(snap) {
-        return { id: id, name: snap.val() || 'Unknown', count: counts[id] };
+        return { id: id, name: getFriendName(id, snap.val() || 'Unknown'), count: counts[id] };
       });
     });
     Promise.all(pendingNames).then(function(users) {
@@ -1821,6 +2554,156 @@ function downloadImageViewer() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// ===== GROUP MEMBERS, KICK, BAN =====
+
+function removeGroupMembersBtn() {
+  var all = document.querySelectorAll('[id^="gm-btn-"]');
+  all.forEach(function(el) { el.remove(); });
+}
+
+var _gmGroupId = null;
+var _gmTargetUid = null;
+var _gmTargetName = '';
+
+function showGroupMembers(groupId) {
+  _gmGroupId = groupId;
+  var myUid = auth.currentUser.uid;
+  var title = document.getElementById('group-members-title');
+  var list = document.getElementById('group-members-list');
+  list.innerHTML = '<p style="text-align:center;color:rgba(45,45,45,0.4);padding:20px;">Loading...</p>';
+  document.getElementById('group-members-modal').style.display = 'flex';
+
+  db.ref('groups/' + groupId).once('value').then(function(snap) {
+    var grp = snap.val();
+    if (!grp || !grp.members) { list.innerHTML = '<p style="text-align:center;color:rgba(45,45,45,0.4);padding:20px;">Group not found.</p>'; return; }
+    var isAdmin = (grp.creator === myUid || myUid === ADMIN_UID);
+    title.textContent = 'Members (' + Object.keys(grp.members).length + ')';
+
+    var bannedMap = grp.banned || {};
+    var uidList = Object.keys(grp.members);
+    var pendingNames = uidList.map(function(uid) {
+      return db.ref('users/' + uid).once('value').then(function(userSnap) {
+        var user = userSnap.val();
+        var name = getFriendName(uid, user ? user.displayName : null);
+        var colour = user ? (user.avatarColour || '#2d5da1') : '#2d5da1';
+        return { uid: uid, name: name, colour: colour };
+      });
+    });
+
+    Promise.all(pendingNames).then(function(users) {
+      var html = '';
+      users.forEach(function(u) {
+        var initial = u.name.charAt(0).toUpperCase();
+        var isCreator = (u.uid === grp.creator);
+        var isBanned = bannedMap[u.uid];
+        var bannedExpires = isBanned ? isBanned.expiresAt : null;
+        var bannedLabel = '';
+        if (isBanned) {
+          if (bannedExpires && bannedExpires !== 0) {
+            var remaining = Math.ceil((bannedExpires - Date.now()) / 1000);
+            if (remaining > 0) bannedLabel = '<span style="color:var(--color-accent);font-size:0.75rem;"> (banned ' + Math.ceil(remaining / 60) + 'm)</span>';
+            else bannedLabel = '<span style="color:var(--color-accent);font-size:0.75rem;"> (banned)</span>';
+          } else {
+            bannedLabel = '<span style="color:var(--color-accent);font-size:0.75rem;"> (banned)</span>';
+          }
+        }
+
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border);">';
+        html += '<span class="avatar avatar-sm" style="width:28px;height:28px;font-size:0.75rem;background:' + u.colour + ';flex-shrink:0;">' + initial + '</span>';
+        html += '<span style="flex:1;">' + u.name + (isCreator ? ' <span style="font-size:0.7rem;opacity:0.5;">(creator)</span>' : '') + '</span>' + bannedLabel;
+
+        if (isAdmin && !isCreator) {
+          if (isBanned) {
+            html += '<button class="btn btn-secondary" style="padding:2px 10px;font-size:0.75rem;min-height:auto;" onclick="unbanMember(\'' + groupId + '\',\'' + u.uid + '\')">Unban</button>';
+          } else {
+            html += '<button class="btn btn-secondary" style="padding:2px 10px;font-size:0.75rem;min-height:auto;margin-right:4px;" onclick="showKickConfirm(\'' + groupId + '\',\'' + u.uid + '\',\'' + u.name.replace(/'/g, "\\'") + '\')">Kick</button>';
+            html += '<button class="btn btn-danger" style="padding:2px 10px;font-size:0.75rem;min-height:auto;" onclick="showBanDuration(\'' + groupId + '\',\'' + u.uid + '\',\'' + u.name.replace(/'/g, "\\'") + '\')">Ban</button>';
+          }
+        }
+        html += '</div>';
+      });
+      list.innerHTML = html;
+    });
+  });
+}
+
+function showKickConfirm(groupId, uid, name) {
+  if (confirm('Kick "' + name + '" from this group?')) {
+    kickMember(groupId, uid);
+  }
+}
+
+function kickMember(groupId, uid) {
+  var myUid = auth.currentUser.uid;
+  db.ref('groups/' + groupId).once('value').then(function(snap) {
+    var grp = snap.val();
+    if (!grp) return;
+    if (grp.creator !== myUid && myUid !== ADMIN_UID) { showToast('Only the group creator can kick members.'); return; }
+    if (uid === grp.creator) { showToast('Cannot kick the group creator.'); return; }
+    var updates = {};
+    updates['groups/' + groupId + '/members/' + uid] = null;
+    updates['userGroups/' + uid + '/' + groupId] = null;
+    db.ref().update(updates).then(function() {
+      showToast('Member kicked.');
+      showGroupMembers(groupId);
+    });
+  });
+}
+
+var _banGroupId = null;
+var _banTargetUid = null;
+
+function showBanDuration(groupId, uid, name) {
+  _banGroupId = groupId;
+  _banTargetUid = uid;
+  document.getElementById('ban-duration-name').textContent = 'Ban ' + name + ' for:';
+  document.getElementById('ban-duration-modal').style.display = 'flex';
+}
+
+function confirmBan(durationMs) {
+  var groupId = _banGroupId;
+  var uid = _banTargetUid;
+  var myUid = auth.currentUser.uid;
+  if (!groupId || !uid) return;
+
+  db.ref('groups/' + groupId).once('value').then(function(snap) {
+    var grp = snap.val();
+    if (!grp) return;
+    if (grp.creator !== myUid && myUid !== ADMIN_UID) { showToast('Only the group creator can ban members.'); return; }
+    if (uid === grp.creator) { showToast('Cannot ban the group creator.'); return; }
+
+    var expiresAt = durationMs === 0 ? 0 : Date.now() + durationMs;
+    var updates = {};
+    updates['groups/' + groupId + '/banned/' + uid] = {
+      bannedBy: myUid,
+      expiresAt: expiresAt,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
+    updates['groups/' + groupId + '/members/' + uid] = null;
+    updates['userGroups/' + uid + '/' + groupId] = null;
+    db.ref().update(updates).then(function() {
+      document.getElementById('ban-duration-modal').style.display = 'none';
+      showToast('Member banned.');
+      showGroupMembers(groupId);
+    });
+  });
+}
+
+function unbanMember(groupId, uid) {
+  db.ref('groups/' + groupId).once('value').then(function(snap) {
+    var grp = snap.val();
+    if (!grp) return;
+    var myUid = auth.currentUser.uid;
+    if (grp.creator !== myUid && myUid !== ADMIN_UID) { showToast('Only the group creator can unban members.'); return; }
+    var updates = {};
+    updates['groups/' + groupId + '/banned/' + uid] = null;
+    db.ref().update(updates).then(function() {
+      showToast('Member unbanned.');
+      showGroupMembers(groupId);
+    });
+  });
 }
 
 // ===== GROUP DELETE / LEAVE =====
@@ -1919,6 +2802,13 @@ function applyUISettings() {
     if (list) list.style.display = 'none';
     if (arrow) arrow.classList.add('collapsed');
   }
+
+  if (localStorage.getItem('frCollapsed') === '1') {
+    var frList = document.getElementById('fr-list');
+    var frArrow = document.getElementById('fr-collapse-arrow');
+    if (frList) frList.style.display = 'none';
+    if (frArrow) frArrow.classList.add('collapsed');
+  }
 }
 
 function showReleaseNotes() {
@@ -1976,8 +2866,6 @@ function dismissReleaseNotes() {
     if (snap.val()) localStorage.setItem('seenVersion', snap.val());
   });
   document.getElementById('release-notes-modal').style.display = 'none';
-  // Switch to announcements channel so user sees the changelog
-  switchToChannel('announcements');
 }
 
 function hideReleaseNotes() {
@@ -2014,7 +2902,7 @@ function showUpdateBanner(version, url) {
   banner.innerHTML =
     '<span>Update available: <strong>v' + version + '</strong></span>' +
     '<button id="update-download-btn" class="btn" style="padding:4px 16px;min-height:36px;font-size:0.9rem;margin-left:auto;">Download</button>' +
-    '<button id="update-dismiss-btn" style="background:none;border:none;cursor:pointer;font-size:1.2rem;padding:4px 8px;color:inherit;">✕</button>';
+    '<button id="update-dismiss-btn" style="background:none;border:none;cursor:pointer;padding:4px 8px;color:inherit;"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l10 10"/><path d="M13 3L3 13"/></svg></button>';
   banner.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--color-secondary);color:#fff;font-size:0.9rem;flex-shrink:0;';
 
   var messageArea = document.querySelector('.message-area');
@@ -2038,6 +2926,44 @@ function showUpdateBanner(version, url) {
   });
   document.getElementById('update-dismiss-btn').addEventListener('click', function() {
     banner.remove();
+  });
+}
+
+function autoUpdateOnLaunch() {
+  if (!window.__TAURI__) return;
+  window.__TAURI__.app.getVersion().then(function(myVersion) {
+    // Check if we just updated
+    var preVersion = localStorage.getItem('scribble_preVersion');
+    if (preVersion && preVersion !== myVersion) {
+      localStorage.removeItem('scribble_preVersion');
+      showUpdateCompleteModal(preVersion, myVersion);
+      return;
+    }
+    // Check for pending update
+    db.ref('appVersion').once('value').then(function(snapshot) {
+      var data = snapshot.val();
+      if (!data || !data.latest || !data.downloadUrl) return;
+      if (isNewerVersion(myVersion, data.latest)) {
+        localStorage.setItem('scribble_preVersion', myVersion);
+        window.__TAURI__.core.invoke('auto_install', { url: data.downloadUrl }).then(function() {
+          window.__TAURI__.core.invoke('quit_app');
+        }).catch(function(err) {
+          console.error('Auto-update failed:', err);
+          localStorage.removeItem('scribble_preVersion');
+          showUpdateBanner(data.latest, data.downloadUrl);
+        });
+      }
+    });
+  });
+}
+
+function showUpdateCompleteModal(oldVersion, newVersion) {
+  var safeKey = newVersion.replace(/\./g, '_');
+  db.ref('appVersion/releases/' + safeKey + '/notes').once('value').then(function(snap) {
+    var notes = snap.val() || 'See announcements for details.';
+    document.getElementById('release-notes-version').textContent = 'Updated to v' + newVersion;
+    document.getElementById('release-notes-body').textContent = notes;
+    document.getElementById('release-notes-modal').style.display = 'flex';
   });
 }
 

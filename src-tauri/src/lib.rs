@@ -49,6 +49,25 @@ async fn download_installer(url: String) -> Result<String, String> {
     Ok(file_path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+async fn auto_install(url: String) -> Result<String, String> {
+    let response = reqwest::blocking::get(&url).map_err(|e| format!("Download failed: {}", e))?;
+    let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
+
+    let temp_dir = std::env::temp_dir();
+    let file_name = url.rsplit('/').next().unwrap_or("Scribble_setup.exe");
+    let file_path = temp_dir.join(file_name);
+
+    std::fs::write(&file_path, &bytes).map_err(|e| format!("Write failed: {}", e))?;
+
+    std::process::Command::new(&file_path)
+        .args(["/S"])
+        .spawn()
+        .map_err(|e| format!("Launch failed: {}", e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
 fn focus_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -146,7 +165,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![notify, open_url, quit_app, show_window, download_installer])
+        .invoke_handler(tauri::generate_handler![notify, open_url, quit_app, show_window, download_installer, auto_install])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

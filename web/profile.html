@@ -16,6 +16,7 @@
   <div class="title-bar">
     <div class="title-bar-left">
       <img src="scribble logo.png" height="28" alt="Scribble">
+      <span style="font-size:0.75rem;opacity:0.5;margin-left:12px;white-space:nowrap;">tell your friends but not the teachers</span>
       <button class="window-btn" id="btn-darkmode" title="Dark mode" onclick="toggleDarkMode()">
         <svg class="icon-moon" viewBox="0 0 16 16" width="14" height="14">
           <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
@@ -60,21 +61,28 @@
   </div>
 
   <div style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px;">
-    <div class="card tape" style="width:90%;max-width:420px;text-align:center;padding:32px;">
-      <div id="profile-avatar" style="margin-bottom:16px;display:flex;justify-content:center;"></div>
-
-      <h1 id="profile-name" style="font-family:'Kalam',cursive;font-size:2rem;margin-bottom:4px;cursor:pointer;" onclick="editName()">Loading...</h1>
-      <p id="profile-email" style="color:rgba(45,45,45,0.6);margin-bottom:24px;"></p>
-
-      <div class="card card-postit" style="padding:14px 18px;text-align:left;margin-bottom:20px;font-size:1.5rem;line-height:1.5;">
-        <div>✦ messages <strong id="msg-count">0</strong></div>
-        <div>✦ joined <strong id="joined-date">—</strong></div>
-        <div>✦ following <strong id="following-count">0</strong></div>
-        <div>✦ followers <strong id="followers-count">0</strong></div>
+    <div class="card tape" style="width:95%;max-width:640px;text-align:center;padding:24px 32px;">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;text-align:left;">
+        <div id="profile-avatar" style="flex-shrink:0;display:flex;"></div>
+        <div style="flex:1;min-width:0;">
+          <h1 id="profile-name" style="font-family:'Kalam',cursive;font-size:1.8rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="editName()">Loading...</h1>
+          <p id="profile-email" style="color:rgba(45,45,45,0.6);font-size:0.85rem;"></p>
+        </div>
       </div>
 
-      <div class="card" style="padding:14px 18px;text-align:left;margin-bottom:20px;">
-        <h3 style="font-family:'Kalam',cursive;font-size:1.1rem;margin-bottom:12px;">⚙️ Settings</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="card card-postit" style="padding:10px 14px;text-align:left;font-size:1.3rem;line-height:1.5;">
+          <div>✦ msgs <strong id="msg-count">0</strong></div>
+          <div>✦ joined <strong id="joined-date">—</strong></div>
+        </div>
+        <div class="card card-postit" style="padding:10px 14px;text-align:left;font-size:1.3rem;line-height:1.5;">
+          <div>✦ following <strong id="following-count">0</strong></div>
+          <div>✦ followers <strong id="followers-count">0</strong></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px 18px;text-align:left;margin-bottom:16px;">
+        <h3 style="font-family:'Kalam',cursive;font-size:1.1rem;margin-bottom:12px;"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="vertical-align:middle;margin-right:4px;"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2"/><path d="M8 13v2"/><path d="M1 8h2"/><path d="M13 8h2"/><path d="M3 3l1.5 1.5"/><path d="M11.5 11.5L13 13"/><path d="M13 3l-1.5 1.5"/><path d="M4.5 11.5L3 13"/></svg> Settings</h3>
 
         <div class="settings-card">
           <div class="setting-row">
@@ -85,12 +93,27 @@
             </div>
           </div>
 
-          <div class="setting-row">
-            <label>Avatar Color</label>
-            <div class="color-picker-wrap">
-              <input type="color" id="icon-color-picker" oninput="setIconColor(this.value)">
-              <button class="btn" style="padding:4px 12px;min-height:32px;font-size:0.8rem;" onclick="resetIconColor()">Reset</button>
+          <div class="setting-row" style="flex-direction:column;align-items:stretch;">
+            <label style="margin-bottom:6px;">Your Colour</label>
+            <div class="color-picker-wrap" style="flex-wrap:wrap;gap:6px;">
+              <div class="swatch" style="background:#ff4d4d;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#ff4d4d')" data-colour="#ff4d4d"></div>
+              <div class="swatch" style="background:#f5c842;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#f5c842')" data-colour="#f5c842"></div>
+              <div class="swatch" style="background:#4caf7d;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#4caf7d')" data-colour="#4caf7d"></div>
+              <div class="swatch" style="background:#2d5da1;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#2d5da1')" data-colour="#2d5da1"></div>
+              <div class="swatch" style="background:#e87d9f;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#e87d9f')" data-colour="#e87d9f"></div>
+              <div class="swatch" style="background:#ffa54d;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#ffa54d')" data-colour="#ffa54d"></div>
+              <div class="swatch" style="background:#9b59b6;width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;" onclick="setIconColor('#9b59b6')" data-colour="#9b59b6"></div>
+              <input type="color" id="icon-color-picker" oninput="setIconColor(this.value)" style="width:24px;height:24px;padding:0;border:none;cursor:pointer;">
+              <button class="btn" style="padding:2px 8px;min-height:24px;font-size:0.7rem;" onclick="resetIconColor()">Reset</button>
             </div>
+          </div>
+
+          <div class="setting-row">
+            <label>Accent Mode</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+              <input type="checkbox" id="accent-toggle" onchange="toggleAccent(this.checked)">
+              Use my colour as accent
+            </label>
           </div>
 
           <div class="setting-row">
@@ -126,18 +149,21 @@
       currentProfileUser = user;
 
       var initial = user.displayName ? user.displayName.charAt(0).toUpperCase() : '?';
-      document.getElementById('profile-avatar').innerHTML = '<div class="avatar avatar-lg avatar-fallback">' + initial + '</div>';
       document.getElementById('profile-name').textContent = user.displayName || 'Unnamed';
       document.getElementById('profile-email').textContent = user.email;
 
       db.ref('users/' + user.uid).once('value').then(function(snapshot) {
         if (snapshot.exists()) {
           var data = snapshot.val();
+          var colour = data.avatarColour || '#2d5da1';
+          document.getElementById('profile-avatar').innerHTML = '<div class="avatar avatar-lg avatar-fallback" style="background:' + colour + ';">' + initial + '</div>';
           if (data.createdAt) {
             var date = new Date(data.createdAt);
             var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             document.getElementById('joined-date').textContent = months[date.getMonth()] + ' ' + date.getFullYear();
           }
+        } else {
+          document.getElementById('profile-avatar').innerHTML = '<div class="avatar avatar-lg avatar-fallback" style="background:#2d5da1;">' + initial + '</div>';
         }
       });
 
@@ -294,7 +320,19 @@
     function setIconColor(color) {
       if (auth.currentUser) {
         db.ref('users/' + auth.currentUser.uid + '/avatarColour').set(color).then(function() {
-          showToast('Avatar color updated');
+          showToast('Color updated');
+          var initial = auth.currentUser.displayName ? auth.currentUser.displayName.charAt(0).toUpperCase() : '?';
+          document.getElementById('profile-avatar').innerHTML = '<div class="avatar avatar-lg avatar-fallback" style="background:' + color + ';">' + initial + '</div>';
+        }).catch(function() {});
+      }
+    }
+
+    function toggleAccent(enabled) {
+      if (auth.currentUser) {
+        db.ref('users/' + auth.currentUser.uid + '/accentEnabled').set(enabled).then(function() {
+          if (enabled) { document.body.classList.add('accent-mode'); }
+          else { document.body.classList.remove('accent-mode'); }
+          showToast(enabled ? 'Accent mode on' : 'Accent mode off');
         }).catch(function() {});
       }
     }
@@ -399,9 +437,18 @@
       if (scale !== 1) document.body.style.zoom = scale;
 
       if (auth.currentUser) {
-        db.ref('users/' + auth.currentUser.uid + '/avatarColour').once('value').then(function(snap) {
-          var c = snap.val();
-          if (c) document.getElementById('icon-color-picker').value = c;
+        db.ref('users/' + auth.currentUser.uid).once('value').then(function(snap) {
+          var data = snap.val() || {};
+          var c = data.avatarColour || '#2d5da1';
+          document.getElementById('icon-color-picker').value = c;
+          document.querySelectorAll('.color-picker-wrap .swatch').forEach(function(el) {
+            if (el.dataset.colour === c) { el.style.borderColor = '#000'; }
+            else { el.style.borderColor = 'transparent'; }
+          });
+          if (data.accentEnabled) {
+            document.getElementById('accent-toggle').checked = true;
+            document.body.classList.add('accent-mode');
+          }
         });
       }
 
