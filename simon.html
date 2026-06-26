@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Simon - Scribble</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-background: #fdfbf7;
+      --color-foreground: #2d2d2d;
+      --color-muted: #e5e0d8;
+      --color-border: #2d2d2d;
+      --color-secondary: #2d5da1;
+      --color-sticky: #fff9c4;
+      --color-shadow: #2d2d2d;
+      --font-heading: 'Kalam', cursive;
+      --font-body: 'Patrick Hand', cursive;
+    }
+    body.dark {
+      --color-background: #121212;
+      --color-foreground: #ffffff;
+      --color-muted: #2a2a2a;
+      --color-border: #333;
+      --color-shadow: transparent;
+      background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font-body);
+      background: var(--color-background);
+      background-image: radial-gradient(var(--color-muted) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: var(--color-foreground);
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 2px dashed var(--color-border);
+      background: var(--color-background);
+    }
+    .header h1 { font-family: var(--font-heading); font-size: 1.4rem; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .window-btn {
+      background: none; border: 2px solid var(--color-border); cursor: pointer; padding: 6px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      color: var(--color-foreground); display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+    }
+    .window-btn:hover { background: var(--color-muted); box-shadow: 2px 2px 0 0 var(--color-shadow); }
+    .back-btn {
+      background: none; border: 2px solid var(--color-border); cursor: pointer; padding: 4px 12px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body); font-size: 0.9rem; color: var(--color-foreground);
+    }
+    .back-btn:hover { background: var(--color-muted); box-shadow: 2px 2px 0 var(--color-shadow); }
+    .screen { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+    .screen.active { display: flex; }
+    .start-screen {
+      display: flex; flex-direction: column; align-items: center; gap: 24px; max-width: 400px; width: 100%;
+    }
+    .start-screen h2 { font-family: var(--font-heading); font-size: 1.8rem; text-align: center; }
+    .start-screen p { font-size: 1rem; opacity: 0.7; text-align: center; }
+    .mode-card {
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      gap: 12px; padding: 28px 40px; text-align: center;
+      background: #c8e6c9;
+    }
+    .mode-card:hover { transform: scale(1.05); box-shadow: 3px 3px 0 var(--color-shadow); }
+    .mode-card span { font-family: var(--font-heading); font-weight: 700; font-size: 1.2rem; }
+    .game-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; flex: 1; justify-content: center;
+    }
+    .status-bar {
+      font-family: var(--font-heading); font-size: 1.1rem; text-align: center;
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center;
+    }
+    .status-bar .stat { display: flex; align-items: center; gap: 4px; }
+    .simon-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      max-width: 340px;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+    }
+    .simon-btn {
+      border: 3px solid var(--color-border);
+      border-radius: 16px;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.1s;
+      opacity: 0.6;
+    }
+    .simon-btn.active { opacity: 1 !important; transform: scale(1.05); box-shadow: 0 0 20px rgba(255,255,255,0.5); }
+    .simon-btn:active { opacity: 1 !important; }
+    .simon-btn.disabled { cursor: default; }
+    .simon-btn.s0 { background: #e53935; }
+    .simon-btn.s1 { background: #43a047; }
+    .simon-btn.s2 { background: #1e88e5; }
+    .simon-btn.s3 { background: #fdd835; }
+    .simon-btn.s4 { background: #8e24aa; }
+    .simon-btn.s5 { background: #ff6f00; }
+    .simon-btn.s6 { background: #00acc1; }
+    .simon-btn.s7 { background: #d81b60; }
+    .simon-btn.s8 { background: #6d4c41; }
+    .board-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .primary-btn {
+      background: var(--color-secondary); border: 2px solid var(--color-border); color: #fff;
+      cursor: pointer; padding: 6px 18px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body); font-size: 0.95rem;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .primary-btn:hover { transform: scale(1.05); box-shadow: 3px 3px 0 var(--color-shadow); }
+    .secondary-btn {
+      background: var(--color-muted); border: 2px solid var(--color-border); cursor: pointer; padding: 6px 18px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body); font-size: 0.95rem; color: var(--color-foreground);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .secondary-btn:hover { transform: scale(1.05); box-shadow: 3px 3px 0 var(--color-shadow); }
+    .win-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .win-overlay.active { display: flex; }
+    .win-card {
+      background: var(--color-background); border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      padding: 28px 32px; text-align: center; max-width: 340px; width: 90%;
+      box-shadow: 6px 6px 0 var(--color-shadow);
+    }
+    .win-card h2 { font-family: var(--font-heading); font-size: 1.6rem; margin-bottom: 6px; }
+    .win-card p { font-size: 1rem; margin-bottom: 4px; }
+    .win-card .btn-row { display: flex; gap: 10px; margin-top: 16px; justify-content: center; flex-wrap: wrap; }
+    .lb-wrap {
+      margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--color-border);
+      max-height: 160px; overflow-y: auto; text-align: left;
+    }
+    .lb-wrap h3 { font-family: var(--font-heading); font-size: 0.85rem; text-align: center; margin-bottom: 6px; }
+    .lb-wrap ol { list-style: none; padding: 0; font-size: 0.8rem; }
+    .lb-wrap li { display: flex; justify-content: space-between; padding: 2px 4px; border-radius: 4px; }
+    .lb-wrap li.me { background: rgba(0,0,0,0.06); font-weight: 700; }
+    .lb-wrap .lb-empty { text-align: center; opacity: 0.5; font-size: 0.8rem; padding: 8px 0; }
+    @media (max-width: 400px) { .simon-grid { max-width: 280px; gap: 8px; } }
+  </style>
+</head>
+<body>
+<div class="header">
+  <h1>🔴 Simon</h1>
+  <div class="header-right">
+    <button class="back-btn" id="header-back-btn" style="display:none;" onclick="goHome()">← Back</button>
+    <button class="window-btn" id="dark-toggle" title="Toggle dark mode" onclick="document.body.classList.toggle('dark')">
+      <svg viewBox="0 0 16 16" width="14" height="14">
+        <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</div>
+<div class="screen active" id="screen-start">
+  <div class="start-screen">
+    <h2>🔴 Simon</h2>
+    <p>Watch the pattern, then repeat it! How long can you keep up?</p>
+    <div class="mode-card" onclick="startGame()">
+      <span>▶ Start Game</span>
+    </div>
+  </div>
+</div>
+<div class="screen" id="screen-game">
+  <div class="game-wrap">
+    <div class="status-bar">
+      <span class="stat" id="stat-level">🎯 Level 0</span>
+      <span class="stat" id="stat-seq">📋 0</span>
+    </div>
+    <div class="simon-grid" id="simon-grid"></div>
+    <div class="board-controls">
+      <button class="secondary-btn" onclick="goHome()">← Menu</button>
+    </div>
+  </div>
+</div>
+<div class="win-overlay" id="win-overlay">
+  <div class="win-card">
+    <h2>😵 Game Over</h2>
+    <p id="win-level">You reached level 0</p>
+    <p id="win-seq">Sequence: 0</p>
+    <div class="lb-wrap">
+      <h3>🏆 Leaderboard</h3>
+      <div id="lb-content" class="lb-empty">Loading...</div>
+    </div>
+    <div class="btn-row">
+      <button class="primary-btn" onclick="closeWin()">Play Again</button>
+      <button class="secondary-btn" onclick="goHome()">Menu</button>
+    </div>
+  </div>
+</div>
+<script>
+var DB_SECRET = 'VkAJSSFjEpCFAeDr6Sy1pDoAoBmxgOInoUoLUGc9';
+var DB_BASE = 'https://telegram-a007d-default-rtdb.firebaseio.com';
+
+var COLORS = ['#e53935','#43a047','#1e88e5','#fdd835','#8e24aa','#ff6f00','#00acc1','#d81b60','#6d4c41'];
+var sequence = [];
+var playerIndex = 0;
+var level = 0;
+var playing = false;
+var acceptingInput = false;
+var timerInterval = null;
+
+function shuffleArray(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+  document.getElementById('header-back-btn').style.display = (id !== 'screen-start') ? 'inline-block' : 'none';
+}
+
+function goHome() {
+  sequence = []; playerIndex = 0; level = 0; playing = false; acceptingInput = false;
+  document.getElementById('win-overlay').classList.remove('active');
+  showScreen('screen-start');
+}
+
+function startGame() {
+  sequence = []; playerIndex = 0; level = 0; playing = true; acceptingInput = false;
+  document.getElementById('win-overlay').classList.remove('active');
+  showScreen('screen-game');
+  renderGrid();
+  updateStats();
+  setTimeout(nextLevel, 600);
+}
+
+function renderGrid() {
+  var el = document.getElementById('simon-grid');
+  el.innerHTML = '';
+  for (var i = 0; i < 9; i++) {
+    var btn = document.createElement('div');
+    btn.className = 'simon-btn s' + i;
+    btn.dataset.idx = i;
+    btn.onclick = function() { playerPress(parseInt(this.dataset.idx)); };
+    el.appendChild(btn);
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-level').textContent = '🎯 Level ' + level;
+  document.getElementById('stat-seq').textContent = '📋 ' + sequence.length;
+}
+
+function nextLevel() {
+  if (!playing) return;
+  level++;
+  sequence.push(Math.floor(Math.random() * 9));
+  playerIndex = 0;
+  acceptingInput = false;
+  updateStats();
+  playSequence();
+}
+
+function playSequence() {
+  var i = 0;
+  var btns = document.querySelectorAll('.simon-btn');
+  var speed = Math.max(300, 600 - level * 15);
+
+  function flashNext() {
+    if (i >= sequence.length) {
+      acceptingInput = true;
+      btns.forEach(function(b) { b.classList.remove('disabled'); });
+      return;
+    }
+    btns.forEach(function(b) { b.classList.remove('active'); });
+    var idx = sequence[i];
+    btns[idx].classList.add('active');
+    playTone(idx);
+    i++;
+    setTimeout(function() {
+      btns.forEach(function(b) { b.classList.remove('active'); });
+      if (i < sequence.length) setTimeout(flashNext, speed * 0.4);
+      else { setTimeout(function() { acceptingInput = true; btns.forEach(function(b) { b.classList.remove('disabled'); }); }, speed * 0.4); }
+    }, speed);
+  }
+  btns.forEach(function(b) { b.classList.add('disabled'); });
+  flashNext();
+}
+
+function playTone(idx) {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 300 + idx * 80;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  } catch(e) {}
+}
+
+function playerPress(idx) {
+  if (!acceptingInput || !playing) return;
+  var expected = sequence[playerIndex];
+  var btns = document.querySelectorAll('.simon-btn');
+
+  btns[idx].classList.add('active');
+  playTone(idx);
+  setTimeout(function() { btns[idx].classList.remove('active'); }, 200);
+
+  if (idx !== expected) {
+    gameOver();
+    return;
+  }
+  playerIndex++;
+  if (playerIndex >= sequence.length) {
+    acceptingInput = false;
+    btns.forEach(function(b) { b.classList.add('disabled'); });
+    setTimeout(nextLevel, 600);
+  }
+}
+
+function gameOver() {
+  playing = false;
+  acceptingInput = false;
+  document.getElementById('win-level').textContent = 'You reached level ' + level;
+  document.getElementById('win-seq').textContent = 'Sequence length: ' + sequence.length;
+  document.getElementById('win-overlay').classList.add('active');
+  var score = level * 100;
+  submitLeaderboard('simon', score);
+  loadLeaderboard('simon', score);
+}
+
+function closeWin() {
+  document.getElementById('win-overlay').classList.remove('active');
+  startGame();
+}
+
+function submitLeaderboard(game, score) {
+  var name = localStorage.getItem('ttt_display_name') || 'Anonymous';
+  fetch(DB_BASE + '/leaderboard/' + game + '.json?auth=' + DB_SECRET, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, score: score, submittedAt: Date.now() })
+  }).catch(function() {});
+}
+
+function loadLeaderboard(game, myScore) {
+  fetch(DB_BASE + '/leaderboard/' + game + '.json?auth=' + DB_SECRET)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var entries = [];
+      if (data) {
+        for (var key in data) {
+          var e = data[key];
+          entries.push({ name: e.name || 'Anonymous', score: e.score || 0 });
+        }
+        entries.sort(function(a, b) { return b.score - a.score; });
+      }
+      var html = '';
+      if (entries.length === 0) {
+        html = '<div class="lb-empty">No scores yet — be the first!</div>';
+      } else {
+        html = '<ol>';
+        for (var i = 0; i < entries.length; i++) {
+          var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+          var cls = entries[i].score === myScore ? ' class="me"' : '';
+          html += '<li' + cls + '><span>' + medal + ' ' + entries[i].name + '</span> <span>' + entries[i].score + '</span></li>';
+        }
+        html += '</ol>';
+      }
+      document.getElementById('lb-content').innerHTML = html;
+    })
+    .catch(function() {
+      document.getElementById('lb-content').innerHTML = '<div class="lb-empty">Could not load leaderboard.</div>';
+    });
+}
+</script>
+</body>
+</html>

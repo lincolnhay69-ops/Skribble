@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Tic-Tac-Toe - Scribble</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-background: #fdfbf7;
+      --color-foreground: #2d2d2d;
+      --color-muted: #e5e0d8;
+      --color-border: #2d2d2d;
+      --color-secondary: #2d5da1;
+      --color-sticky: #fff9c4;
+      --color-shadow: #2d2d2d;
+      --font-heading: 'Kalam', cursive;
+      --font-body: 'Patrick Hand', cursive;
+    }
+    body.dark {
+      --color-background: #121212;
+      --color-foreground: #ffffff;
+      --color-muted: #2a2a2a;
+      --color-border: #333;
+      --color-shadow: transparent;
+      background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font-body);
+      background: var(--color-background);
+      background-image: radial-gradient(var(--color-muted) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: var(--color-foreground);
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 2px dashed var(--color-border);
+      background: var(--color-background);
+    }
+    .header h1 {
+      font-family: var(--font-heading);
+      font-size: 1.4rem;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .window-btn {
+      background: none;
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      color: var(--color-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+    }
+    .window-btn:hover {
+      background: var(--color-muted);
+      box-shadow: 2px 2px 0 0 var(--color-shadow);
+    }
+    .back-btn {
+      background: none;
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 4px 12px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--color-foreground);
+    }
+    .back-btn:hover {
+      background: var(--color-muted);
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .screen.active { display: flex; }
+    .mode-select {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      max-width: 400px;
+      width: 100%;
+    }
+    .mode-select h2 {
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      text-align: center;
+    }
+    .mode-select p {
+      font-size: 1rem;
+      opacity: 0.7;
+      text-align: center;
+    }
+    .mode-cards {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+    }
+    .mode-card {
+      flex: 1;
+      aspect-ratio: 1 / 1;
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      gap: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .mode-card:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .mode-card-local { background: #c8e6c9; }
+    .mode-card-online { background: #bbdefb; }
+    .mode-card svg { width: 48px; height: 48px; }
+    .mode-card span {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .board-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: 400px;
+      width: 100%;
+    }
+    .status-bar {
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      text-align: center;
+      min-height: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .board {
+      display: grid;
+      gap: 6px;
+      width: 100%;
+      max-width: 340px;
+    }
+    .size-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-heading);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .size-picker span { font-size: 0.95rem; opacity: 0.7; }
+    .size-btn {
+      background: var(--color-muted);
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 4px 12px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--color-foreground);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .size-btn:hover { transform: scale(1.05); box-shadow: 2px 2px 0 var(--color-shadow); }
+    .size-btn.active {
+      background: var(--color-secondary);
+      color: #fff;
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .cell {
+      aspect-ratio: 1 / 1;
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      background: var(--color-sticky);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .cell:hover:not(.disabled) {
+      transform: scale(1.03);
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .cell.disabled { cursor: default; opacity: 0.85; }
+    .cell.win-cell {
+      background: #a5d6a7;
+      box-shadow: 0 0 0 2px #4caf50;
+    }
+    .cell svg { width: 50%; height: 50%; }
+    .cell-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #ttt-lb-wrap { scrollbar-width: thin; }
+    .primary-btn {
+      background: var(--color-secondary);
+      border: 2px solid var(--color-border);
+      color: #fff;
+      cursor: pointer;
+      padding: 8px 20px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .primary-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .secondary-btn {
+      background: var(--color-muted);
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 8px 20px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      color: var(--color-foreground);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .secondary-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .online-lobby {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      max-width: 380px;
+      width: 100%;
+    }
+    .online-lobby.active { display: flex; }
+    .online-lobby h2 {
+      font-family: var(--font-heading);
+      font-size: 1.4rem;
+    }
+    .lobby-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+    .room-code-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--color-sticky);
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      padding: 12px 18px;
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      letter-spacing: 4px;
+      justify-content: center;
+    }
+    .room-code-display button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--color-foreground);
+      display: flex;
+      padding: 4px;
+    }
+    .lobby-input-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .lobby-input-row input {
+      flex: 1;
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      text-align: center;
+      text-transform: uppercase;
+      padding: 10px;
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      background: var(--color-background);
+      color: var(--color-foreground);
+      outline: none;
+    }
+    .lobby-input-row input:focus {
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .status-msg {
+      font-size: 0.95rem;
+      opacity: 0.7;
+      text-align: center;
+      min-height: 1.5rem;
+    }
+    .status-msg.error { color: #e53935; opacity: 1; }
+    @media (max-width: 480px) {
+      .mode-cards { flex-direction: column; }
+      .board { max-width: 280px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⭕ Tic-Tac-Toe</h1>
+  <div class="header-right">
+    <button class="back-btn" id="header-back-btn" style="display:none;" onclick="goHome()">← Back</button>
+    <button class="window-btn" id="dark-toggle" title="Toggle dark mode" onclick="document.body.classList.toggle('dark')">
+      <svg viewBox="0 0 16 16" width="14" height="14">
+        <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- Mode Select -->
+<div class="screen active" id="screen-mode">
+  <div class="mode-select">
+    <h2>Choose a mode</h2>
+    <p>Play on the same device or challenge someone online</p>
+    <div class="size-picker">
+      <span>Grid:</span>
+      <button class="size-btn active" data-size="3" onclick="setGridSize(3)">3×3</button>
+      <button class="size-btn" data-size="4" onclick="setGridSize(4)">4×4</button>
+      <button class="size-btn" data-size="5" onclick="setGridSize(5)">5×5</button>
+      <button class="size-btn" data-size="6" onclick="setGridSize(6)">6×6</button>
+    </div>
+    <div class="mode-cards">
+      <div class="mode-card mode-card-local" onclick="startLocal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2"/>
+          <circle cx="8" cy="12" r="1.5"/>
+          <circle cx="16" cy="12" r="1.5"/>
+        </svg>
+        <span>Local<br>Hot-Seat</span>
+      </div>
+      <div class="mode-card mode-card-online" onclick="initOnline()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16v16H4z"/><path d="M4 12h16"/><path d="M12 4v16"/>
+          <circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/>
+          <circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/>
+        </svg>
+        <span>Online<br>Multiplayer</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Online Lobby -->
+<div class="screen" id="screen-lobby">
+  <div class="online-lobby active" id="lobby-root">
+    <h2>Online Game</h2>
+    <div style="display:flex;gap:10px;width:100%;">
+      <button class="primary-btn" style="flex:1;" onclick="createOnlineGame()">Create Game</button>
+      <button class="secondary-btn" style="flex:1;" onclick="showJoinInput()">Join Game</button>
+    </div>
+    <div id="join-row" class="lobby-input-row" style="display:none;">
+      <input type="text" id="join-code-input" maxlength="6" placeholder="ENTER CODE" onkeyup="if(event.key==='Enter')joinOnlineGame()">
+      <button class="primary-btn" onclick="joinOnlineGame()">Join</button>
+    </div>
+    <div id="room-created" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%;">
+      <p style="font-size:0.9rem;opacity:0.7;">Share this code with a friend:</p>
+      <div class="room-code-display">
+        <span id="room-code-value"></span>
+        <button onclick="copyRoomCode()" title="Copy code">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="10" height="10" rx="1"/><path d="M6 6h8v8H6z"/></svg>
+        </button>
+      </div>
+      <p class="status-msg" id="lobby-status">Waiting for opponent...</p>
+    </div>
+    <p class="status-msg" id="lobby-error"></p>
+    <button class="secondary-btn" onclick="goHome()">Back</button>
+  </div>
+</div>
+
+<!-- Game Board -->
+<div class="screen" id="screen-board">
+  <div class="board-wrap">
+    <div class="status-bar" id="status-bar">
+      <span id="status-text">Loading...</span>
+    </div>
+    <div class="board" id="board">    </div>
+    <div class="cell-controls" id="cell-controls">
+      <button class="primary-btn" id="reset-btn" onclick="resetGame()">↻ Play Again</button>
+      <button class="secondary-btn" onclick="goHome()">← Menu</button>
+    </div>
+    <div id="ttt-lb-wrap" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed var(--color-border);max-height:160px;overflow-y:auto;text-align:left;width:100%;max-width:340px;">
+      <h3 style="font-family:var(--font-heading);font-size:0.85rem;text-align:center;margin-bottom:6px;">🏆 Leaderboard</h3>
+      <div id="ttt-lb-content" style="text-align:center;opacity:0.5;font-size:0.8rem;padding:8px 0;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var DB_SECRET = 'VkAJSSFjEpCFAeDr6Sy1pDoAoBmxgOInoUoLUGc9';
+var DB_BASE = 'https://telegram-a007d-default-rtdb.firebaseio.com';
+
+// ---- Player ID (local UUID, persisted in localStorage) ----
+function getPlayerId() {
+  var id = localStorage.getItem('ttt_player_id');
+  if (id) return id;
+  id = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  localStorage.setItem('ttt_player_id', id);
+  return id;
+}
+var myId = getPlayerId();
+function getDisplayName() { return localStorage.getItem('ttt_display_name') || ''; }
+
+// ---- REST helpers ----
+function fbPut(path, data) {
+  return fetch(DB_BASE + path + '.json?auth=' + DB_SECRET, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); });
+}
+function fbPost(path, data) {
+  return fetch(DB_BASE + path + '.json?auth=' + DB_SECRET, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); });
+}
+function fbPatch(path, data) {
+  return fetch(DB_BASE + path + '.json?auth=' + DB_SECRET, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); });
+}
+function fbGet(path) {
+  return fetch(DB_BASE + path + '.json?auth=' + DB_SECRET)
+    .then(function(r) { return r.json(); });
+}
+function fbDelete(path) {
+  return fetch(DB_BASE + path + '.json?auth=' + DB_SECRET, { method: 'DELETE' });
+}
+
+// ---- State ----
+var mode = null; // 'local' | 'online'
+var onlineRole = null; // 'host' | 'guest'
+var gameId = null;
+var myUid = null;
+var currentTurn = 'X';
+var board = [];
+var gridSize = 3;
+var gameOver = false;
+var onlineRef = null;
+var onlineBoardRef = null;
+var mySymbol = null;
+var hostName = '';
+var guestName = '';
+var _lastSyncTime = 0;
+var _syncDelay = 500;
+var _pollTimer = null;
+var _eventSource = null;
+var _knownMoveCount = 0;
+var _resetVersion = 0;
+
+// ---- SVG icons ----
+var X_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="#e53935" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+var O_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="#2d5da1" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="8"/></svg>';
+var TINY_X = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#e53935" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/></svg>';
+var TINY_O = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#2d5da1" stroke-width="2.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/></svg>';
+
+// ---- Grid size ----
+function setGridSize(n) {
+  gridSize = n;
+  document.querySelectorAll('.size-btn').forEach(function(b) {
+    b.classList.toggle('active', parseInt(b.dataset.size) === n);
+  });
+}
+
+// ---- Screen helpers ----
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+  document.getElementById('header-back-btn').style.display = (id !== 'screen-mode') ? 'inline-block' : 'none';
+}
+
+function goHome() {
+  cleanupOnline();
+  mode = null; onlineRole = null; gameId = null; mySymbol = null; hostName = ''; guestName = '';
+  board = Array(gridSize * gridSize).fill(''); currentTurn = 'X'; gameOver = false; _knownMoveCount = 0; _resetVersion = 0; _lastSyncTime = 0;
+  document.getElementById('ttt-lb-wrap').style.display = 'none';
+  showScreen('screen-mode');
+}
+
+// ---- Board rendering ----
+function renderBoard() {
+  var el = document.getElementById('board');
+  el.style.gridTemplateColumns = 'repeat(' + gridSize + ', 1fr)';
+  el.innerHTML = '';
+  var total = gridSize * gridSize;
+  for (var i = 0; i < total; i++) {
+    var cell = document.createElement('div');
+    cell.className = 'cell';
+    if (board[i] === 'X') cell.innerHTML = X_ICON;
+    else if (board[i] === 'O') cell.innerHTML = O_ICON;
+    if (gameOver || board[i] !== '') cell.classList.add('disabled');
+    cell.dataset.index = i;
+    cell.onclick = function() { makeMove(parseInt(this.dataset.index)); };
+    el.appendChild(cell);
+  }
+  updateStatus();
+}
+
+function updateStatus() {
+  var el = document.getElementById('status-text');
+  var winner = checkWinner();
+  var justEnded = false;
+  if (winner === 'X') { el.innerHTML = TINY_X + ' ' + (hostName || 'X') + ' wins!'; if (!gameOver) justEnded = true; gameOver = true; }
+  else if (winner === 'O') { el.innerHTML = TINY_O + ' ' + (guestName || 'O') + ' wins!'; if (!gameOver) justEnded = true; gameOver = true; }
+  else if (board.every(function(c) { return c !== ''; })) { el.textContent = 'Draw!'; if (!gameOver) justEnded = true; gameOver = true; }
+  else if (mode === 'local') {
+    el.innerHTML = (currentTurn === 'X' ? TINY_X : TINY_O) + ' ' + (currentTurn === 'X' ? 'Player 1' : 'Player 2') + "'s turn";
+  } else {
+    var turnName = currentTurn === 'X' ? (hostName || 'X') : (guestName || 'O');
+    if (mySymbol === currentTurn) el.innerHTML = (currentTurn === 'X' ? TINY_X : TINY_O) + ' Your turn (' + turnName + ')';
+    else el.innerHTML = (currentTurn === 'X' ? TINY_X : TINY_O) + ' ' + turnName + "'s turn";
+  }
+  highlightWinningCells();
+  document.getElementById('reset-btn').textContent = gameOver ? '↻ Play Again' : '↻ Reset';
+  if (justEnded && mode === 'local') submitLeaderboard(winner ? 100 : 50);
+}
+
+function highlightWinningCells() {
+  var lines = getWinLines(), cells = document.querySelectorAll('.cell');
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i], first = board[line[0]];
+    if (!first) continue;
+    var allSame = true;
+    for (var j = 1; j < line.length; j++) {
+      if (board[line[j]] !== first) { allSame = false; break; }
+    }
+    if (allSame)
+      for (var j = 0; j < line.length; j++)
+        if (cells[line[j]]) cells[line[j]].classList.add('win-cell');
+  }
+}
+
+function getWinLines() {
+  var N = gridSize, W = N <= 4 ? N : 4, lines = [];
+  function add(line) { lines.push(line); }
+  // Rows
+  for (var r = 0; r < N; r++)
+    for (var c = 0; c <= N - W; c++) {
+      var l = [];
+      for (var k = 0; k < W; k++) l.push(r * N + c + k);
+      add(l);
+    }
+  // Columns
+  for (var c = 0; c < N; c++)
+    for (var r = 0; r <= N - W; r++) {
+      var l = [];
+      for (var k = 0; k < W; k++) l.push((r + k) * N + c);
+      add(l);
+    }
+  // Diagonals (\)
+  for (var r = 0; r <= N - W; r++)
+    for (var c = 0; c <= N - W; c++) {
+      var l = [];
+      for (var k = 0; k < W; k++) l.push((r + k) * N + (c + k));
+      add(l);
+    }
+  // Anti-diagonals (/)
+  for (var r = 0; r <= N - W; r++)
+    for (var c = W - 1; c < N; c++) {
+      var l = [];
+      for (var k = 0; k < W; k++) l.push((r + k) * N + (c - k));
+      add(l);
+    }
+  return lines;
+}
+
+function checkWinner() {
+  var lines = getWinLines();
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i], first = board[line[0]];
+    if (!first) continue;
+    var allSame = true;
+    for (var j = 1; j < line.length; j++) {
+      if (board[line[j]] !== first) { allSame = false; break; }
+    }
+    if (allSame) return first;
+  }
+  return null;
+}
+
+// ---- Move logic ----
+function makeMove(index) {
+  if (gameOver || board[index] !== '') return;
+  if (mode === 'online' && mySymbol !== currentTurn) return;
+  var localMoveCount = board.filter(function(c) { return c !== ''; }).length;
+  board[index] = currentTurn;
+  currentTurn = currentTurn === 'X' ? 'O' : 'X';
+  renderBoard();
+  if (mode === 'online') {
+    _knownMoveCount = localMoveCount + 1;
+    fbPatch('/tic-tac-toe/' + gameId, {
+      board: board, currentTurn: currentTurn,
+      moveCount: _knownMoveCount
+    }).then(function() {
+      _lastSyncTime = Date.now();
+    });
+  }
+}
+
+function resetGame() {
+  board = Array(gridSize * gridSize).fill('');
+  currentTurn = 'X';
+  gameOver = false;
+  _knownMoveCount = 0;
+  if (mode === 'local') { renderBoard(); }
+  else if (mode === 'online') {
+    _resetVersion++;
+    _lastSyncTime = Date.now();
+    fbPatch('/tic-tac-toe/' + gameId, {
+      board: board, currentTurn: currentTurn, moveCount: 0, status: 'playing',
+      resetVersion: _resetVersion
+    }).then(function() { _lastSyncTime = Date.now(); renderBoard(); });
+  }
+}
+
+// ---- Local mode ----
+function startLocal() {
+  mode = 'local'; board = Array(gridSize * gridSize).fill(''); currentTurn = 'X'; gameOver = false; _knownMoveCount = 0; _resetVersion = 0;
+  showScreen('screen-board'); renderBoard(); loadLeaderboard();
+}
+
+// ---- Online mode ----
+function initOnline() {
+  showScreen('screen-lobby');
+  document.getElementById('lobby-root').style.display = 'flex';
+  document.getElementById('room-created').style.display = 'none';
+  document.getElementById('join-row').style.display = 'none';
+  document.getElementById('lobby-error').textContent = '';
+  document.getElementById('lobby-status').textContent = '';
+  document.getElementById('ttt-lb-wrap').style.display = 'none';
+}
+
+function generateCode() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var c = '';
+  for (var i = 0; i < 6; i++) c += chars.charAt(Math.floor(Math.random() * chars.length));
+  return c;
+}
+
+function createOnlineGame() {
+  var name = getDisplayName() || 'Player X';
+  var code = generateCode();
+  gameId = 'ttt_' + code;
+  onlineRole = 'host';
+  mySymbol = 'X';
+  hostName = name;
+  guestName = '';
+  _knownMoveCount = 0;
+  _lastSyncTime = 0;
+  _resetVersion = 0;
+  fbPut('/tic-tac-toe/' + gameId, {
+    hostId: myId, guestId: null, hostName: name, guestName: '', resetVersion: 0, gridSize: gridSize,
+    board: Array(gridSize * gridSize).fill(''), currentTurn: 'X', status: 'waiting', moveCount: 0
+  }).then(function() {
+    document.getElementById('room-code-value').textContent = code;
+    document.getElementById('room-created').style.display = 'flex';
+    document.getElementById('lobby-error').textContent = '';
+    document.getElementById('lobby-status').textContent = 'Waiting for opponent...';
+    listenForOpponent();
+  });
+}
+
+function showJoinInput() {
+  var row = document.getElementById('join-row');
+  row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+  if (row.style.display !== 'none') document.getElementById('join-code-input').focus();
+}
+
+function joinOnlineGame() {
+  var code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length < 4) { document.getElementById('lobby-error').textContent = 'Enter a valid code'; return; }
+  gameId = 'ttt_' + code;
+  _knownMoveCount = 0;
+  _lastSyncTime = 0;
+  fbGet('/tic-tac-toe/' + gameId).then(function(data) {
+    if (!data) { document.getElementById('lobby-error').textContent = 'Game not found'; return; }
+    if (data.guestId) { document.getElementById('lobby-error').textContent = 'Game is full'; return; }
+    if (data.status !== 'waiting') { document.getElementById('lobby-error').textContent = 'Game already started'; return; }
+    onlineRole = 'guest';
+    mySymbol = 'O';
+    var name = getDisplayName() || 'Player O';
+    hostName = data.hostName || 'Player X';
+    guestName = name;
+    gridSize = data.gridSize || 3;
+    fbPatch('/tic-tac-toe/' + gameId, { guestId: myId, guestName: name, status: 'playing' }).then(function() {
+      document.getElementById('lobby-error').textContent = '';
+      startOnlineGame(data);
+    });
+  });
+}
+
+function listenForOpponent() {
+  _knownMoveCount = 0;
+  _lastSyncTime = 0;
+  pollGameState(1000);
+}
+
+function pollGameState(interval) {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(function() {
+    fbGet('/tic-tac-toe/' + gameId).then(function(data) {
+      if (!data || data.status === 'abandoned') {
+        document.getElementById('lobby-status').textContent = 'Host left the game';
+        clearInterval(_pollTimer);
+        return;
+      }
+      if (data.guestId && data.status === 'playing') {
+        document.getElementById('lobby-status').textContent = (data.guestName || 'Opponent') + ' joined!';
+        clearInterval(_pollTimer);
+        setTimeout(function() { startOnlineGame(data); }, 500);
+      }
+    });
+  }, interval);
+}
+
+function startOnlineGame(remoteData) {
+  mode = 'online';
+  hostName = remoteData ? (remoteData.hostName || 'Player X') : hostName;
+  guestName = remoteData ? (remoteData.guestName || 'Player O') : guestName;
+  gridSize = remoteData ? (remoteData.gridSize || 3) : gridSize;
+  showScreen('screen-board');
+  board = Array(gridSize * gridSize).fill(''); currentTurn = 'X'; gameOver = false; _knownMoveCount = 0; _resetVersion = 0; _lastSyncTime = 0;
+  renderBoard();
+  startOnlinePolling();
+}
+
+function startOnlinePolling() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(function() {
+    var now = Date.now();
+    if (now - _lastSyncTime < _syncDelay) return;
+    fbGet('/tic-tac-toe/' + gameId).then(function(data) {
+      if (!data || data.status === 'abandoned') {
+        document.getElementById('status-text').textContent = 'Opponent left the game';
+        gameOver = true; if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        renderBoard(); return;
+      }
+      hostName = data.hostName || hostName || 'Player X';
+      guestName = data.guestName || guestName || 'Player O';
+      gridSize = data.gridSize || gridSize || 3;
+      var remoteVersion = data.resetVersion || 0;
+      if (remoteVersion > _resetVersion) {
+        _resetVersion = remoteVersion; _knownMoveCount = 0; _lastSyncTime = 0;
+        board = data.board || Array(gridSize * gridSize).fill(''); currentTurn = 'X'; gameOver = false;
+        renderBoard(); return;
+      }
+      var localMoveCount = board.filter(function(c) { return c !== ''; }).length;
+      if (data.moveCount <= localMoveCount) return;
+      _knownMoveCount = data.moveCount;
+      board = data.board || Array(gridSize * gridSize).fill('');
+      currentTurn = data.currentTurn || 'X';
+      gameOver = data.status === 'X_wins' || data.status === 'O_wins' || data.status === 'draw';
+      renderBoard();
+      var total = gridSize * gridSize;
+      if (data.moveCount >= total && !checkWinner()) { gameOver = true; renderBoard(); }
+      _lastSyncTime = Date.now();
+    });
+  }, 800);
+}
+
+function cleanupOnline() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (_eventSource) { _eventSource.close(); _eventSource = null; }
+  if (gameId) {
+    fbPatch('/tic-tac-toe/' + gameId, { status: 'abandoned' }).then(function() {
+      fbDelete('/tic-tac-toe/' + gameId);
+    });
+  }
+}
+
+function copyRoomCode() {
+  var code = document.getElementById('room-code-value').textContent;
+  navigator.clipboard.writeText(code).catch(function() {});
+}
+window.addEventListener('beforeunload', function() {
+  if (gameId) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('PATCH', 'https://telegram-a007d-default-rtdb.firebaseio.com/tic-tac-toe/' + gameId + '.json?shallow=true', false);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify({ status: 'abandoned' }));
+  }
+});
+
+// ---- Leaderboard ----
+function submitLeaderboard(score) {
+  if (typeof score !== 'number' || score < 1) return;
+  var name = getDisplayName() || 'Anonymous';
+  var entry = { name: name, score: Math.round(score), ts: Date.now() };
+  fbPost('/leaderboard/tic-tac-toe', entry).then(function() { loadLeaderboard(); }).catch(function() {});
+}
+
+function loadLeaderboard() {
+  var wrap = document.getElementById('ttt-lb-wrap');
+  var cont = document.getElementById('ttt-lb-content');
+  if (!wrap || !cont) return;
+  wrap.style.display = 'block';
+  cont.innerHTML = 'Loading...';
+  fbGet('/leaderboard/tic-tac-toe').then(function(data) {
+    if (!data || typeof data !== 'object') { cont.textContent = 'No scores yet.'; return; }
+    var entries = Object.keys(data).map(function(k) { return data[k]; });
+    entries.sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+    var html = '<table style="width:100%;font-size:0.75rem;border-collapse:collapse;">';
+    html += '<tr style="border-bottom:1px solid var(--color-border);"><th style="text-align:left;padding:2px 4px;">#</th><th style="text-align:left;padding:2px 4px;">Name</th><th style="text-align:right;padding:2px 4px;">Score</th></tr>';
+    entries.forEach(function(e, i) {
+      if (!e || !e.name) return;
+      html += '<tr><td style="padding:2px 4px;">' + (i + 1) + '</td><td style="padding:2px 4px;">' + escHtml(String(e.name).slice(0, 20)) + '</td><td style="text-align:right;padding:2px 4px;">' + (e.score || 0) + '</td></tr>';
+    });
+    html += '</table>';
+    cont.innerHTML = html;
+  }).catch(function() { cont.textContent = 'Could not load scores.'; });
+}
+
+function escHtml(s) { return String(s).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+</script>
+</body>
+</html>

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Memory - Scribble</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-background: #fdfbf7;
+      --color-foreground: #2d2d2d;
+      --color-muted: #e5e0d8;
+      --color-border: #2d2d2d;
+      --color-secondary: #2d5da1;
+      --color-sticky: #fff9c4;
+      --color-shadow: #2d2d2d;
+      --font-heading: 'Kalam', cursive;
+      --font-body: 'Patrick Hand', cursive;
+    }
+    body.dark {
+      --color-background: #121212;
+      --color-foreground: #ffffff;
+      --color-muted: #2a2a2a;
+      --color-border: #333;
+      --color-shadow: transparent;
+      background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font-body);
+      background: var(--color-background);
+      background-image: radial-gradient(var(--color-muted) 1px, transparent 1px);
+      background-size: 24px 24px;
+      color: var(--color-foreground);
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 2px dashed var(--color-border);
+      background: var(--color-background);
+    }
+    .header h1 {
+      font-family: var(--font-heading);
+      font-size: 1.4rem;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .window-btn {
+      background: none;
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      color: var(--color-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+    }
+    .window-btn:hover {
+      background: var(--color-muted);
+      box-shadow: 2px 2px 0 0 var(--color-shadow);
+    }
+    .back-btn {
+      background: none;
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 4px 12px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--color-foreground);
+    }
+    .back-btn:hover {
+      background: var(--color-muted);
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .screen.active { display: flex; }
+    .mode-select {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      max-width: 500px;
+      width: 100%;
+    }
+    .mode-select h2 {
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      text-align: center;
+    }
+    .mode-select p {
+      font-size: 1rem;
+      opacity: 0.7;
+      text-align: center;
+    }
+    .diff-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+    .diff-card {
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      gap: 6px;
+      padding: 20px 12px;
+      text-align: center;
+    }
+    .diff-card:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .diff-card .diff-name {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+    .diff-card .diff-desc {
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+    .diff-easy { background: #c8e6c9; }
+    .diff-medium { background: #fff9c4; }
+    .diff-hard { background: #ffcc80; }
+    .diff-extreme { background: #ef9a9a; }
+    .board-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      flex: 1;
+      overflow: hidden;
+    }
+    .status-bar {
+      font-family: var(--font-heading);
+      font-size: 1rem;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 4px 0;
+    }
+    .status-bar .stat {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .board {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+      max-width: 700px;
+      flex: 1;
+      align-content: center;
+      justify-content: center;
+    }
+    .card {
+      aspect-ratio: 1 / 1;
+      min-width: 0;
+      min-height: 0;
+      border: 2px solid var(--color-border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.15s;
+      font-size: 1.6rem;
+      user-select: none;
+      background: var(--color-sticky);
+    }
+    .card.face-down {
+      background: linear-gradient(135deg, var(--color-secondary) 25%, transparent 25%) -8px 0,
+                  linear-gradient(225deg, var(--color-secondary) 25%, transparent 25%) -8px 0,
+                  linear-gradient(315deg, var(--color-secondary) 25%, transparent 25%) 0 0,
+                  linear-gradient(45deg, var(--color-secondary) 25%, transparent 25%) 0 0;
+      background-size: 16px 16px;
+      background-color: var(--color-muted);
+    }
+    .card.face-down::after {
+      content: '?';
+      font-family: var(--font-heading);
+      font-size: 1.4rem;
+      color: rgba(255,255,255,0.5);
+    }
+    .card.face-up {
+      background: var(--color-background);
+      transform: scale(1.02);
+    }
+    .card.matched {
+      background: #c8e6c9;
+      cursor: default;
+      opacity: 0.7;
+      transform: scale(0.95);
+    }
+    .card:hover:not(.matched):not(.face-up) {
+      transform: scale(1.05);
+      box-shadow: 2px 2px 0 var(--color-shadow);
+    }
+    .board-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .primary-btn {
+      background: var(--color-secondary);
+      border: 2px solid var(--color-border);
+      color: #fff;
+      cursor: pointer;
+      padding: 6px 18px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .primary-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .secondary-btn {
+      background: var(--color-muted);
+      border: 2px solid var(--color-border);
+      cursor: pointer;
+      padding: 6px 18px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      color: var(--color-foreground);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .secondary-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 3px 3px 0 var(--color-shadow);
+    }
+    .win-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .win-overlay.active { display: flex; }
+    .win-card {
+      background: var(--color-background);
+      border: 2px solid var(--color-border);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      padding: 32px 40px;
+      text-align: center;
+      max-width: 340px;
+      width: 90%;
+      box-shadow: 6px 6px 0 var(--color-shadow);
+    }
+    .win-card h2 {
+      font-family: var(--font-heading);
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+    .win-card p {
+      font-size: 1rem;
+      margin-bottom: 4px;
+      opacity: 0.8;
+    }
+    .win-card .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .lb-wrap {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--color-border);
+      max-height: 180px;
+      overflow-y: auto;
+      text-align: left;
+    }
+    .lb-wrap h3 {
+      font-family: var(--font-heading);
+      font-size: 0.85rem;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .lb-wrap ol {
+      list-style: none;
+      padding: 0;
+      font-size: 0.8rem;
+    }
+    .lb-wrap li {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .lb-wrap li.me {
+      background: rgba(0,0,0,0.06);
+      font-weight: 700;
+    }
+    .lb-wrap .lb-empty {
+      text-align: center;
+      opacity: 0.5;
+      font-size: 0.8rem;
+      padding: 8px 0;
+    }
+    @media (max-width: 600px) {
+      .card { font-size: 1.1rem; }
+      .board { gap: 3px; }
+      .win-card { padding: 24px 20px; }
+    }
+    @media (max-width: 400px) {
+      .card { font-size: 0.9rem; }
+      .board { gap: 2px; }
+      .diff-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧠 Memory</h1>
+  <div class="header-right">
+    <button class="back-btn" id="header-back-btn" style="display:none;" onclick="goHome()">← Back</button>
+    <button class="window-btn" id="dark-toggle" title="Toggle dark mode" onclick="document.body.classList.toggle('dark')">
+      <svg viewBox="0 0 16 16" width="14" height="14">
+        <path d="M 9 2 C 5.5 2 3 5 3 8.5 C 3 12 5.5 14.5 9 14.5 C 10.5 14.5 12 13.5 13 12 C 10 12.5 6.5 11 6.5 8 C 6.5 5.5 8 3.5 10.5 3 C 10 2.5 9.5 2 9 2 Z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- Difficulty Select -->
+<div class="screen active" id="screen-diff">
+  <div class="mode-select">
+    <h2>Pick a difficulty</h2>
+    <p>Match all the pairs as fast as you can!</p>
+    <div class="diff-grid">
+      <div class="diff-card diff-easy" onclick="startGame('easy')">
+        <span class="diff-name">Easy</span>
+        <span class="diff-desc">4 × 4 · 8 pairs</span>
+      </div>
+      <div class="diff-card diff-medium" onclick="startGame('medium')">
+        <span class="diff-name">Medium</span>
+        <span class="diff-desc">6 × 6 · 18 pairs</span>
+      </div>
+      <div class="diff-card diff-hard" onclick="startGame('hard')">
+        <span class="diff-name">Hard</span>
+        <span class="diff-desc">8 × 8 · 32 pairs</span>
+      </div>
+      <div class="diff-card diff-extreme" onclick="startGame('extreme')">
+        <span class="diff-name">Extreme</span>
+        <span class="diff-desc">10 × 10 · 50 pairs</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Game Board -->
+<div class="screen" id="screen-board">
+  <div class="board-wrap">
+    <div class="status-bar" id="status-bar">
+      <span class="stat" id="stat-pairs">🎯 0 / 8</span>
+      <span class="stat" id="stat-moves">👆 0</span>
+      <span class="stat" id="stat-time">⏱ 0:00</span>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="board-controls">
+      <button class="secondary-btn" onclick="goHome()">← Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win Overlay -->
+<div class="win-overlay" id="win-overlay">
+  <div class="win-card">
+    <h2>🎉 You did it!</h2>
+    <p id="win-pairs">Pairs matched: 0 / 0</p>
+    <p id="win-moves">Moves: 0</p>
+    <p id="win-time">Time: 0:00</p>
+    <div class="lb-wrap" id="leaderboard-wrap">
+      <h3>🏆 Leaderboard</h3>
+      <div id="lb-content" class="lb-empty">Loading...</div>
+    </div>
+    <div class="btn-row">
+      <button class="primary-btn" onclick="closeWin()">Play Again</button>
+      <button class="secondary-btn" onclick="goHome()">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var DB_SECRET = 'VkAJSSFjEpCFAeDr6Sy1pDoAoBmxgOInoUoLUGc9';
+var DB_BASE = 'https://telegram-a007d-default-rtdb.firebaseio.com';
+
+var EMOJIS = [
+  '🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍍','🥝','🥭','🍌','🍉','🍈','🥥',
+  '🥕','🥦','🌽','🥬','🥒','🍅','🥔','🧅','🍄','🥜',
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵',
+  '🐔','🐧','🐦','🦆','🦉','🐺','🐗','🐴','🐝','🐛','🐌','🐢','🐍',
+  '🐙','🐠','🐟','🐡','🐬','🐳'
+];
+
+var gridSizes = { easy: 4, medium: 6, hard: 8, extreme: 10 };
+var difficulty = null;
+var gridSize = 4;
+var cards = [];
+var firstCard = null;
+var secondCard = null;
+var locked = false;
+var moves = 0;
+var pairsFound = 0;
+var totalPairs = 0;
+var timerStarted = false;
+var startTime = 0;
+var timerInterval = null;
+var elapsed = 0;
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+  document.getElementById('header-back-btn').style.display = (id !== 'screen-diff') ? 'inline-block' : 'none';
+}
+
+function goHome() {
+  stopTimer();
+  difficulty = null;
+  cards = [];
+  firstCard = null;
+  secondCard = null;
+  locked = false;
+  moves = 0;
+  pairsFound = 0;
+  timerStarted = false;
+  document.getElementById('win-overlay').classList.remove('active');
+  showScreen('screen-diff');
+}
+
+function startGame(diff) {
+  difficulty = diff;
+  gridSize = gridSizes[diff];
+  totalPairs = (gridSize * gridSize) / 2;
+  moves = 0;
+  pairsFound = 0;
+  firstCard = null;
+  secondCard = null;
+  locked = false;
+  timerStarted = false;
+  elapsed = 0;
+  document.getElementById('win-overlay').classList.remove('active');
+
+  var deck = [];
+  var used = [];
+  for (var i = 0; i < totalPairs; i++) {
+    var emoji = EMOJIS[i % EMOJIS.length];
+    deck.push({ value: emoji, flipped: false, matched: false, index: -1 });
+    deck.push({ value: emoji, flipped: false, matched: false, index: -1 });
+  }
+  shuffle(deck);
+  for (var i = 0; i < deck.length; i++) deck[i].index = i;
+  cards = deck;
+
+  showScreen('screen-board');
+  renderBoard();
+  updateStats();
+}
+
+function renderBoard() {
+  var el = document.getElementById('board');
+  el.style.gridTemplateColumns = 'repeat(' + gridSize + ', 1fr)';
+  el.innerHTML = '';
+  for (var i = 0; i < cards.length; i++) {
+    var card = document.createElement('div');
+    card.className = 'card face-down';
+    card.dataset.index = i;
+    card.onclick = function() { flipCard(parseInt(this.dataset.index)); };
+    el.appendChild(card);
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-pairs').textContent = '🎯 ' + pairsFound + ' / ' + totalPairs;
+  document.getElementById('stat-moves').textContent = '👆 ' + moves;
+  if (timerStarted) {
+    var s = Math.floor(elapsed / 1000);
+    var m = Math.floor(s / 60);
+    s = s % 60;
+    document.getElementById('stat-time').textContent = '⏱ ' + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+}
+
+function startTimer() {
+  if (timerStarted) return;
+  timerStarted = true;
+  startTime = Date.now();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(function() {
+    elapsed = Date.now() - startTime;
+    updateStats();
+  }, 200);
+}
+
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+function flipCard(index) {
+  if (locked) return;
+  var card = cards[index];
+  if (!card || card.flipped || card.matched) return;
+
+  startTimer();
+
+  card.flipped = true;
+  var el = document.querySelector('.board .card[data-index="' + index + '"]');
+  if (el) {
+    el.className = 'card face-up';
+    el.textContent = card.value;
+  }
+
+  if (firstCard === null) {
+    firstCard = index;
+  } else {
+    secondCard = index;
+    moves++;
+    locked = true;
+    setTimeout(checkMatch, 800);
+  }
+  updateStats();
+}
+
+function checkMatch() {
+  var c1 = cards[firstCard];
+  var c2 = cards[secondCard];
+
+  if (c1.value === c2.value) {
+    c1.matched = true;
+    c2.matched = true;
+    var el1 = document.querySelector('.board .card[data-index="' + firstCard + '"]');
+    var el2 = document.querySelector('.board .card[data-index="' + secondCard + '"]');
+    if (el1) { el1.className = 'card matched'; el1.textContent = c1.value; }
+    if (el2) { el2.className = 'card matched'; el2.textContent = c2.value; }
+    pairsFound++;
+    if (pairsFound === totalPairs) {
+      stopTimer();
+      showWin();
+    }
+  } else {
+    c1.flipped = false;
+    c2.flipped = false;
+    var el1 = document.querySelector('.board .card[data-index="' + firstCard + '"]');
+    var el2 = document.querySelector('.board .card[data-index="' + secondCard + '"]');
+    if (el1) { el1.className = 'card face-down'; el1.textContent = ''; }
+    if (el2) { el2.className = 'card face-down'; el2.textContent = ''; }
+  }
+
+  firstCard = null;
+  secondCard = null;
+  locked = false;
+  updateStats();
+}
+
+function showWin() {
+  var s = Math.floor(elapsed / 1000);
+  var m = Math.floor(s / 60);
+  s = s % 60;
+  document.getElementById('win-pairs').textContent = 'Pairs matched: ' + pairsFound + ' / ' + totalPairs;
+  document.getElementById('win-moves').textContent = 'Moves: ' + moves;
+  document.getElementById('win-time').textContent = 'Time: ' + m + ':' + (s < 10 ? '0' : '') + s;
+  document.getElementById('win-overlay').classList.add('active');
+  var score = Math.round(pairsFound * 10000 / (moves + s / 10 + 1));
+  submitLeaderboard('memory', score);
+  loadLeaderboard('memory', score);
+}
+
+function closeWin() {
+  document.getElementById('win-overlay').classList.remove('active');
+  startGame(difficulty);
+}
+
+function submitLeaderboard(game, score) {
+  var name = localStorage.getItem('ttt_display_name') || 'Anonymous';
+  fetch(DB_BASE + '/leaderboard/' + game + '.json?auth=' + DB_SECRET, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, score: score, submittedAt: Date.now() })
+  }).catch(function() {});
+}
+
+function loadLeaderboard(game, myScore) {
+  fetch(DB_BASE + '/leaderboard/' + game + '.json?auth=' + DB_SECRET)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var entries = [];
+      if (data) {
+        for (var key in data) {
+          var e = data[key];
+          entries.push({ name: e.name || 'Anonymous', score: e.score || 0 });
+        }
+        entries.sort(function(a, b) { return b.score - a.score; });
+      }
+      var html = '';
+      if (entries.length === 0) {
+        html = '<div class="lb-empty">No scores yet — be the first!</div>';
+      } else {
+        html = '<ol>';
+        for (var i = 0; i < entries.length; i++) {
+          var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+          var cls = entries[i].score === myScore ? ' class="me"' : '';
+          html += '<li' + cls + '><span>' + medal + ' ' + entries[i].name + '</span> <span>' + entries[i].score + '</span></li>';
+        }
+        html += '</ol>';
+      }
+      document.getElementById('lb-content').innerHTML = html;
+    })
+    .catch(function() {
+      document.getElementById('lb-content').innerHTML = '<div class="lb-empty">Could not load leaderboard.</div>';
+    });
+}
+</script>
+</body>
+</html>

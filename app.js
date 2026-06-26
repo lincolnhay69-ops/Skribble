@@ -1,4 +1,5 @@
 var currentUser = null;
+var myDisplayName = '';
 var currentChannelId = null;
 var currentDmId = null;
 var currentDmPeerId = null;
@@ -212,10 +213,16 @@ function updateFriendBadge(count, newestRequest, prevCount, windowFocused) {
       badge.style.display = 'none';
     }
   }
-  if (newestRequest && count > prevCount && !windowFocused) {
+  if (newestRequest && count > prevCount) {
     var reqFrom = newestRequest.from;
     db.ref('users/' + reqFrom + '/displayName').once('value', function(nameSnap) {
-      notifyMessage({ senderId: reqFrom, senderName: nameSnap.val() || 'Someone', text: 'Sent you a friend request' }, 'Friend Request');
+      var name = nameSnap.val() || 'Someone';
+      playNotificationSound();
+      if (windowFocused) {
+        showToast('Friend request from ' + name);
+      } else {
+        notifyMessage({ senderId: reqFrom, senderName: name, text: 'Sent you a friend request' }, 'Friend Request');
+      }
     });
   }
 }
@@ -240,6 +247,7 @@ function renderSidebarAvatar() {
   db.ref('users/' + auth.currentUser.uid).once('value').then(function(snapshot) {
     var data = snapshot.val() || {};
     var displayName = data.displayName || auth.currentUser.displayName || '?';
+    myDisplayName = displayName;
     var colour = data.avatarColour || '#2d5da1';
     var initial = displayName.charAt(0).toUpperCase();
     avatarContainer.innerHTML = '<div class="avatar-wrap"><span class="avatar avatar-sm" style="cursor:pointer;background:' + colour + ';" onclick="window.location.href=\'profile.html\'">' + initial + '</span><span class="status-dot ' + (isWindowFocused ? 'online' : 'away') + '" id="own-status-dot"></span></div>';
@@ -312,6 +320,21 @@ function playRingtone() {
   }
   beep();
   _ringtoneInterval = setInterval(beep, 800);
+}
+
+function playNotificationSound() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    gain.gain.value = 0.3;
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch(e) {}
 }
 
 function createPeerConnection() {
@@ -516,7 +539,7 @@ function answerCall() {
   var screen = document.getElementById('call-screen');
   if (screen) {
     screen.style.display = 'flex';
-    screen.style.position = 'fixed';
+    screen.style.position = 'absolute';
   }
   document.getElementById('call-status-text').textContent = 'Connecting...';
 
@@ -574,6 +597,11 @@ function hangUp() {
 function minimizeCall() {
   document.getElementById('call-screen').style.display = 'none';
   document.getElementById('call-header-bar').style.display = 'flex';
+  document.getElementById('call-header-bar').style.flex = '1';
+  var left = document.getElementById('header-left-section');
+  var right = document.getElementById('header-right-section');
+  if (left) { left.style.display = 'none'; left._hiddenByCall = true; }
+  if (right) { right.style.display = 'none'; right._hiddenByCall = true; }
   var name = document.getElementById('call-peer-name');
   if (name) document.getElementById('call-header-name').textContent = name.textContent;
   var timer = document.getElementById('call-timer');
@@ -583,6 +611,10 @@ function minimizeCall() {
 function focusCallScreen() {
   document.getElementById('call-header-bar').style.display = 'none';
   document.getElementById('call-screen').style.display = 'flex';
+  var left = document.getElementById('header-left-section');
+  var right = document.getElementById('header-right-section');
+  if (left && left._hiddenByCall) { left.style.display = 'flex'; delete left._hiddenByCall; }
+  if (right && right._hiddenByCall) { right.style.display = 'flex'; delete right._hiddenByCall; }
 }
 
 function cleanupCall() {
@@ -612,6 +644,10 @@ function cleanupCall() {
   document.getElementById('call-header-bar').style.display = 'none';
   document.getElementById('call-timer').textContent = '00:00';
   document.getElementById('call-header-timer').textContent = '00:00';
+  var left = document.getElementById('header-left-section');
+  var right = document.getElementById('header-right-section');
+  if (left && left._hiddenByCall) { left.style.display = 'flex'; delete left._hiddenByCall; }
+  if (right && right._hiddenByCall) { right.style.display = 'flex'; delete right._hiddenByCall; }
 }
 
 function startCallTimer() {
@@ -636,9 +672,24 @@ function toggleMute() {
     var muted = tracks.length > 0 && tracks[0].enabled;
     tracks.forEach(function(t) { t.enabled = muted; });
     var btn = document.getElementById('call-mute-btn');
-    if (btn) {
-      btn.classList.toggle('muted', !muted);
-      btn.title = muted ? 'Unmute' : 'Mute';
+    var headerBtn = document.getElementById('call-header-mute');
+    [btn, headerBtn].forEach(function(b) {
+      if (b) {
+        b.classList.toggle('muted', !muted);
+        b.title = muted ? 'Unmute' : 'Mute';
+        b.style.background = muted ? '#e74c3c' : '';
+      }
+    });
+    var icon = document.getElementById('call-mute-icon');
+    var headerIcon = document.getElementById('call-header-mute-icon');
+    if (muted) {
+      var offPath = '<path d="M6.5 2.5A2 2 0 0112 4v3a2.5 2.5 0 01-5 0V4a2 2 0 01-.5-1.5z"/><path d="M3 9v0a5 5 0 005 5v0a5 5 0 005-5"/><path d="M8 14v2"/><line x1="2" y1="2" x2="14" y2="14"/>';
+      if (icon) icon.innerHTML = offPath;
+      if (headerIcon) headerIcon.innerHTML = offPath;
+    } else {
+      var onPath = '<path d="M6.5 2.5A2 2 0 0112 4v3a2.5 2.5 0 01-5 0V4a2 2 0 01-.5-1.5z"/><path d="M3 9v0a5 5 0 005 5v0a5 5 0 005-5"/><path d="M8 14v2"/>';
+      if (icon) icon.innerHTML = onPath;
+      if (headerIcon) headerIcon.innerHTML = onPath;
     }
   }
 }
@@ -848,6 +899,9 @@ function switchToChannel(channelId) {
   removeGroupMembersBtn();
   var callBtn = document.getElementById('dm-call-btn');
   if (callBtn) callBtn.style.display = 'none';
+  document.getElementById('leaderboards-view').style.display = 'none';
+  document.getElementById('games-grid').style.display = 'none';
+  document.getElementById('message-list').style.display = '';
 
   if (currentMsgQuery) { currentMsgQuery.off(); }
 
@@ -944,6 +998,9 @@ function switchToDM(dmId, otherUserId) {
 
   var callBtn = document.getElementById('dm-call-btn');
   if (callBtn) callBtn.style.display = 'inline-flex';
+  document.getElementById('leaderboards-view').style.display = 'none';
+  document.getElementById('games-grid').style.display = 'none';
+  document.getElementById('message-list').style.display = '';
 
   db.ref('users/' + otherUserId).once('value').then(function(snapshot) {
     if (snapshot.exists()) {
@@ -1029,6 +1086,10 @@ function updateSidebarActive() {
     if (gamesEl && document.getElementById('games-grid').style.display !== 'none') {
       gamesEl.classList.add('active');
     }
+    var lbEl = document.getElementById('sidebar-leaderboards');
+    if (lbEl && document.getElementById('leaderboards-view').style.display !== 'none') {
+      lbEl.classList.add('active');
+    }
   }
 }
 
@@ -1087,6 +1148,11 @@ function appendMessage(msg, container) {
     row.appendChild(actions);
   }
   container.appendChild(row);
+
+  if (currentUser && currentUser.uid === ADMIN_UID) {
+    row.style.cursor = 'context-menu';
+    row.addEventListener('click', function(e) { showAdminModMenu(e, msg, row); });
+  }
 }
 
 function createMsgActions(msg, row) {
@@ -1211,6 +1277,84 @@ function confirmDeleteMessage() {
   var path = getMsgPath(key);
   if (!path) return;
   db.ref(path).remove();
+}
+
+var _modMsg = null;
+var _modRow = null;
+var _modSenderId = null;
+var _dismissHandler = null;
+
+function showAdminModMenu(e, msg, row) {
+  if (_dismissHandler) {
+    document.removeEventListener('click', _dismissHandler);
+    _dismissHandler = null;
+  }
+  _modMsg = msg;
+  _modRow = row;
+  _modSenderId = msg.senderId;
+  var menu = document.getElementById('admin-moderation-menu');
+  if (!menu) return;
+
+  var x = Math.min(e.clientX, window.innerWidth - 190);
+  var y = Math.min(e.clientY, window.innerHeight - 160);
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.style.display = 'block';
+
+  _dismissHandler = function() {
+    _dismissAdminMod();
+    document.removeEventListener('click', _dismissHandler);
+    _dismissHandler = null;
+  };
+  setTimeout(function() {
+    document.addEventListener('click', _dismissHandler);
+  }, 10);
+}
+
+function _dismissAdminMod() {
+  var menu = document.getElementById('admin-moderation-menu');
+  if (menu) menu.style.display = 'none';
+  _modMsg = null;
+  _modRow = null;
+}
+
+function adminRemoveMessage(el) {
+  var key = _modMsg && _modMsg._key;
+  if (!key) { _dismissAdminMod(); return; }
+  var path = getMsgPath(key);
+  if (!path) { _dismissAdminMod(); return; }
+  db.ref(path).update({
+    text: 'This content was removed by the Scribble administration team. Keep it family friendly.',
+    ciphertext: null,
+    iv: null,
+    imageData: null,
+    imageURL: null,
+    removedBy: currentUser.uid,
+    removedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+  showToast('Message removed by admin');
+  _dismissAdminMod();
+}
+
+function adminKickUser(el) {
+  if (!currentGroupId) { _dismissAdminMod(); showToast('Kick is only available in groups.'); return; }
+  if (!_modSenderId) { _dismissAdminMod(); return; }
+  var name = getFriendName(_modSenderId, _modMsg.senderName || 'Unknown');
+  if (!confirm('Kick ' + name + ' from this group?')) { _dismissAdminMod(); return; }
+  var updates = {};
+  updates['groups/' + currentGroupId + '/members/' + _modSenderId] = null;
+  updates['userGroups/' + _modSenderId + '/' + currentGroupId] = null;
+  db.ref().update(updates);
+  showToast('Kicked ' + name);
+  _dismissAdminMod();
+}
+
+function adminBanUser(el) {
+  if (!currentGroupId) { _dismissAdminMod(); showToast('Ban is only available in groups.'); return; }
+  if (!_modSenderId) { _dismissAdminMod(); return; }
+  var name = getFriendName(_modSenderId, _modMsg.senderName || 'Unknown');
+  showBanDuration(currentGroupId, _modSenderId, name);
+  _dismissAdminMod();
 }
 
 function replyToMessage(msg) {
@@ -1498,9 +1642,10 @@ function logoutFromSidebar() {
   });
 }
 
-function openGameEmbed(url) {
+function openGameEmbed(url, title) {
   if (!url || url === 'about:blank') { showToast('Game URL not set yet'); return; }
-  document.getElementById('game-embed-title').textContent = 'Game';
+  localStorage.setItem('ttt_display_name', myDisplayName);
+  document.getElementById('game-embed-title').textContent = title || 'Game';
   document.getElementById('game-iframe').src = url;
   document.getElementById('game-embed-modal').style.display = 'flex';
 }
@@ -1519,16 +1664,157 @@ function showGamesGrid() {
   if (callBtn) callBtn.style.display = 'none';
   if (currentMsgQuery) { currentMsgQuery.off(); currentMsgQuery = null; }
   if (currentTypingRef) { currentTypingRef.off(); currentTypingRef = null; }
+  document.getElementById('leaderboards-view').style.display = 'none';
   document.getElementById('message-list').style.display = 'none';
   document.getElementById('games-grid').style.display = 'flex';
   document.getElementById('games-grid').style.flexDirection = 'column';
   document.getElementById('input-bar').style.display = 'none';
   document.getElementById('readonly-notice').style.display = 'none';
   document.getElementById('typing-indicator').style.display = 'none';
-  document.getElementById('current-channel-name').textContent = '🎮 Games';
+  document.getElementById('current-channel-name').innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5" cy="8" r="1.5" fill="currentColor"/><path d="M9.5 6.5L11 8l-1.5 1.5"/><path d="M11.5 6.5L13 8l-1.5 1.5"/></svg> Games';
   document.getElementById('current-channel-name').onclick = null;
   removeGroupMembersBtn();
   updateSidebarActive();
+}
+
+function showLeaderboards() {
+  currentChannelId = null;
+  currentDmId = null;
+  currentDmPeerId = null;
+  currentGroupId = null;
+  var callBtn = document.getElementById('dm-call-btn');
+  if (callBtn) callBtn.style.display = 'none';
+  if (currentMsgQuery) { currentMsgQuery.off(); currentMsgQuery = null; }
+  if (currentTypingRef) { currentTypingRef.off(); currentTypingRef = null; }
+  document.getElementById('games-grid').style.display = 'none';
+  document.getElementById('message-list').style.display = 'none';
+  document.getElementById('input-bar').style.display = 'none';
+  document.getElementById('readonly-notice').style.display = 'none';
+  document.getElementById('typing-indicator').style.display = 'none';
+  document.getElementById('current-channel-name').innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M8 1l1.76 3.58 3.94.57-2.85 2.78.67 3.93L8 10.57l-3.52 1.85.67-3.93L2.3 5.15l3.94-.57z"/><path d="M4.5 12.5l-2 2.5"/><path d="M11.5 12.5l2 2.5"/></svg> Leaderboards';
+  document.getElementById('current-channel-name').onclick = null;
+  removeGroupMembersBtn();
+  var lbView = document.getElementById('leaderboards-view');
+  lbView.style.display = 'flex';
+  lbView.style.flexDirection = 'column';
+  renderLeaderboardTabs();
+  updateSidebarActive();
+}
+
+var LB_GAMES = [
+  { key: 'tic-tac-toe', label: 'Tic-Tac-Toe', icon: '❌' },
+  { key: 'chess', label: 'Chess', icon: '♚' },
+  { key: 'memory', label: 'Memory', icon: '🧠' },
+  { key: 'trivia', label: 'Trivia', icon: '🧩' },
+  { key: 'connect4', label: 'Connect 4', icon: '🔴' },
+  { key: 'simon', label: 'Simon', icon: '🎵' },
+  { key: 'snake', label: 'Snake', icon: '🐍', dbUrl: 'https://globalchat-eeb7a-default-rtdb.firebaseio.com' },
+  { key: 'flappy-bird', label: 'Flappy Bird', icon: '🐦', dbUrl: 'https://flappy-bird-leaderbord-default-rtdb.firebaseio.com' }
+];
+var LB_PLACEHOLDER = [];
+var LB_CACHE = {};
+var LB_ACTIVE_TAB = null;
+
+function renderLeaderboardTabs() {
+  var tabsEl = document.getElementById('lb-tabs');
+  var contentEl = document.getElementById('lb-content');
+  if (!tabsEl) return;
+  tabsEl.innerHTML = '';
+  contentEl.innerHTML = '<div class="lb-loading">Loading...</div>';
+  var allGames = LB_GAMES.concat(LB_PLACEHOLDER);
+  allGames.forEach(function(g) {
+    var tab = document.createElement('div');
+    tab.className = 'lb-tab' + (LB_PLACEHOLDER.indexOf(g) !== -1 ? ' disabled' : '');
+    tab.textContent = g.icon + ' ' + g.label;
+    tab.dataset.key = g.key;
+    if (!LB_GAMES.some(function(x) { return x.key === g.key; })) {
+      tab.title = 'No leaderboard yet';
+    }
+    tab.onclick = function() {
+      if (tab.classList.contains('disabled')) return;
+      switchLeaderboardTab(this.dataset.key);
+    };
+    tabsEl.appendChild(tab);
+  });
+  if (LB_GAMES.length > 0) switchLeaderboardTab(LB_GAMES[0].key);
+}
+
+function switchLeaderboardTab(key) {
+  var tabs = document.querySelectorAll('#lb-tabs .lb-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].dataset.key === key && !tabs[i].classList.contains('disabled')) {
+      tabs[i].classList.add('active');
+      break;
+    }
+  }
+  LB_ACTIVE_TAB = key;
+  var contentEl = document.getElementById('lb-content');
+  contentEl.innerHTML = '<div class="lb-loading">Loading...</div>';
+  var myName = (localStorage.getItem('ttt_display_name') || '').trim();
+  if (LB_CACHE[key]) {
+    renderLeaderboardTable(LB_CACHE[key], myName);
+    return;
+  }
+  var game = null;
+  for (var i = 0; i < LB_GAMES.length; i++) { if (LB_GAMES[i].key === key) { game = LB_GAMES[i]; break; } }
+  var dbUrl = game && game.dbUrl ? game.dbUrl : 'https://telegram-a007d-default-rtdb.firebaseio.com';
+  var auth = game && game.dbUrl ? '' : '?auth=VkAJSSFjEpCFAeDr6Sy1pDoAoBmxgOInoUoLUGc9';
+  fetch(dbUrl + '/leaderboard.json' + auth)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var entries = [];
+      if (data && typeof data === 'object') {
+        for (var k in data) {
+          var e = data[k];
+          if (e) {
+            var name = e.name || e.username || '';
+            if (name) entries.push({ name: String(name).slice(0, 20), score: e.score || 0 });
+          }
+        }
+        entries.sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+      }
+      LB_CACHE[key] = entries;
+      renderLeaderboardTable(entries, myName);
+    })
+    .catch(function() {
+      contentEl.innerHTML = '<div class="lb-error">Could not load scores. <button onclick="switchLeaderboardTab(\'' + key + '\')">Retry</button></div>';
+    });
+}
+
+function renderLeaderboardTable(entries, myName) {
+  var contentEl = document.getElementById('lb-content');
+  if (!entries || entries.length === 0) {
+    contentEl.innerHTML = '<div class="lb-empty">No scores yet — be the first by playing!</div>';
+    return;
+  }
+  var html = '<table class="lb-table"><thead><tr><th class="rank">#</th><th class="name">Name</th><th class="score">Score</th></tr></thead><tbody>';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+    var isMe = myName && e.name.toLowerCase() === myName.toLowerCase();
+    html += '<tr' + (isMe ? ' class="me"' : '') + '><td class="rank">' + medal + '</td><td class="name">' + escHtml(e.name) + '</td><td class="score">' + (e.score || 0) + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  contentEl.innerHTML = html;
+}
+function escHtml(s) { return String(s).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+
+function renderLeaderboardTable(entries, myName) {
+  var contentEl = document.getElementById('lb-content');
+  if (!entries || entries.length === 0) {
+    contentEl.innerHTML = '<div class="lb-empty">No scores yet — be the first by playing!</div>';
+    return;
+  }
+  var html = '<table class="lb-table"><thead><tr><th class="rank">#</th><th class="name">Name</th><th class="score">Score</th></tr></thead><tbody>';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+    var isMe = myName && e.name.toLowerCase() === myName.toLowerCase();
+    html += '<tr' + (isMe ? ' class="me"' : '') + '><td class="rank">' + medal + '</td><td class="name">' + escHtml(e.name) + '</td><td class="score">' + (e.score || 0) + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  contentEl.innerHTML = html;
 }
 
 function showNewDMModal() {
@@ -2194,6 +2480,9 @@ function switchToGroup(groupId) {
   currentDmPeerId = null;
   var callBtn = document.getElementById('dm-call-btn');
   if (callBtn) callBtn.style.display = 'none';
+  document.getElementById('leaderboards-view').style.display = 'none';
+  document.getElementById('games-grid').style.display = 'none';
+  document.getElementById('message-list').style.display = '';
 
   if (currentMsgQuery) { currentMsgQuery.off(); }
 
