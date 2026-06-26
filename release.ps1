@@ -96,7 +96,7 @@ if ($signKey -and $signOrgId -and $signProjSlug) {
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "SignPath signing failed for $($artifact.Name). Continuing unsigned..."
             } else {
-                Write-Host "  ✓ $($artifact.Name) signed!" -ForegroundColor Green
+                Write-Host ("  [OK] " + $artifact.Name + " signed!") -ForegroundColor Green
             }
         }
     }
