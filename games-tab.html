@@ -439,7 +439,7 @@ function openGameEmbed(url, title) {
   document.getElementById('games-content').style.display = 'none';
   var el = document.getElementById('game-embed');
   el.style.display = 'flex';
-  document.getElementById('embed-frame').src = url;
+  document.getElementById('embed-frame').src = url + (url.indexOf('?') > -1 ? '&' : '?') + '_t=' + Date.now();
   document.getElementById('embed-title').textContent = title || 'Game';
 }
 function closeGameEmbed() {

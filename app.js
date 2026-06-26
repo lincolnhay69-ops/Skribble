@@ -1646,7 +1646,7 @@ function openGameEmbed(url, title) {
   if (!url || url === 'about:blank') { showToast('Game URL not set yet'); return; }
   localStorage.setItem('ttt_display_name', myDisplayName);
   document.getElementById('game-embed-title').textContent = title || 'Game';
-  document.getElementById('game-iframe').src = url;
+  document.getElementById('game-iframe').src = url + (url.indexOf('?') > -1 ? '&' : '?') + '_t=' + Date.now();
   document.getElementById('game-embed-modal').style.display = 'flex';
 }
 
