@@ -73,7 +73,41 @@ if ($msi) {
 }
 Write-Host ""
 
-# 5. Commit
+# 5. Sign artifacts with SignPath (if configured)
+$signKey = $env:SIGNPATH_API_KEY
+$signOrgId = $env:SIGNPATH_ORG_ID
+$signProjSlug = $env:SIGNPATH_PROJECT_SLUG
+$signCli = Get-Command "SignPathClient" -ErrorAction SilentlyContinue
+
+if ($signKey -and $signOrgId -and $signProjSlug) {
+    Write-Host "=== Signing artifacts via SignPath ===" -ForegroundColor Magenta
+    $artifactsToSign = @($exe)
+    if ($msi) { $artifactsToSign += $msi }
+
+    if (-not $signCli) {
+        Write-Warning "SignPathClient CLI not found. Install it:"
+        Write-Warning "  dotnet tool install -g SignPathClient"
+        Write-Warning "Then restart your terminal."
+        Write-Warning "Skipping signing step."
+    } else {
+        foreach ($artifact in $artifactsToSign) {
+            Write-Host "  Submitting $($artifact.Name) for signing..." -ForegroundColor Gray
+            & $signCli Source --ApiToken $signKey --OrganizationId $signOrgId --ProjectSlug $signProjSlug --SigningPolicySlug "release-signing" $artifact.FullName
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "SignPath signing failed for $($artifact.Name). Continuing unsigned..."
+            } else {
+                Write-Host "  ✓ $($artifact.Name) signed!" -ForegroundColor Green
+            }
+        }
+    }
+    Write-Host ""
+} else {
+    Write-Host "SignPath not configured. Skipping code signing." -ForegroundColor Yellow
+    Write-Host "  Set SIGNPATH_API_KEY, SIGNPATH_ORG_ID, and SIGNPATH_PROJECT_SLUG to enable." -ForegroundColor Gray
+    Write-Host ""
+}
+
+# 6. Commit
 Write-Host "=== Committing to GitHub ===" -ForegroundColor Magenta
 git -C $scriptRoot add .
 git -C $scriptRoot commit -m "Release v$version"
@@ -81,7 +115,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "Nothing to commit (or commit failed). Continuing..."
 }
 
-# 5. Generate release notes (after commit so log range is valid)
+# 7. Generate release notes (after commit so log range is valid)
 Write-Host "Generating release notes..." -ForegroundColor Cyan
 $prevTag = git -C $scriptRoot describe --tags --abbrev=0 HEAD~ 2>$null
 if ($LASTEXITCODE -eq 0 -and $prevTag) {
@@ -96,14 +130,14 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 Write-Host "Release notes written to $notesPath" -ForegroundColor Gray
 Write-Host ""
 
-# 6. Tag and push
+# 8. Tag and push
 git -C $scriptRoot tag "v$version"
 git -C $scriptRoot push
 git -C $scriptRoot push --tags
 Write-Host "Push complete!" -ForegroundColor Green
 Write-Host ""
 
-# 7. Create GitHub Release
+# 9. Create GitHub Release
 Write-Host "=== Creating GitHub Release ===" -ForegroundColor Magenta
 if ($hasGh) {
     $ghArgs = "-R", "lincolnhay69-ops/Skribble", "release", "create", "v$version", "--title", "Scribble v$version", "--notes-file", $notesPath, $exe.FullName
@@ -123,7 +157,7 @@ if ($hasGh) {
 }
 Write-Host ""
 
-# 7b. Deploy web version to gh-pages
+# 10. Deploy web version to gh-pages
 Write-Host "=== Deploying web version to gh-pages ===" -ForegroundColor Magenta
 $webDir = Join-Path $env:TEMP "scribble_web_deploy_$version"
 Remove-Item $webDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -144,7 +178,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 Write-Host ""
 
-# 8. Update Firebase
+# 11. Update Firebase
 Write-Host "=== Updating Firebase ===" -ForegroundColor Magenta
 $secret = $env:FIREBASE_SECRET
 if ($secret) {

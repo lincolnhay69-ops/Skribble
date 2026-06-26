@@ -1,5 +1,7 @@
 # Scribble
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Chat like you're passing notes.
 
 Scribble is a real-time messaging app with end-to-end private DMs, group chats, native desktop notifications, and system tray integration — built with Tauri and Firebase.
@@ -69,4 +71,6 @@ This single command builds the app, tags the release, creates a GitHub Release w
 
 ## License
 
-Open source. Built with love by [Lincoln](https://github.com/lincolnhay69-ops).
+Distributed under the [MIT License](LICENSE). Built with love by [Lincoln](https://github.com/lincolnhay69-ops).
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). See the [Code Signing Policy](CODE_SIGNING_POLICY.md) for details.
