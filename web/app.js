@@ -27,6 +27,7 @@ var _callerIceRef = null;
 var _calleeIceRef = null;
 var _incomingCallRef = null;
 var _ringStatusRef = null;
+var _activeStatusListener = null;
 var _ringtoneCtx = null;
 var _ringtoneInterval = null;
 
@@ -661,6 +662,7 @@ function cleanupCall() {
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
   if (_callStatusRef) { _callStatusRef.off(); _callStatusRef = null; }
   if (_ringStatusRef) { _ringStatusRef.off(); _ringStatusRef = null; }
+  if (_activeStatusListener) { _activeStatusListener(); _activeStatusListener = null; }
   if (_callerIceRef) { _callerIceRef.off(); _callerIceRef = null; }
   if (_calleeIceRef) { _calleeIceRef.off(); _calleeIceRef = null; }
 
@@ -799,13 +801,29 @@ function initCallListeners() {
   if (_incomingCallRef) _incomingCallRef.off();
   _incomingCallRef = db.ref('user-calls/' + myUid + '/incomingCall');
   _incomingCallRef.on('value', function(snap) {
+    if (_activeStatusListener) { _activeStatusListener(); _activeStatusListener = null; }
     var data = snap.val();
     if (data && data.callId) {
-      db.ref('calls/' + data.callId + '/status').once('value', function(statusSnap) {
-        if (statusSnap.val() === 'ringing' && callState === 'IDLE') {
+      var statusRef = db.ref('calls/' + data.callId + '/status');
+      var handler = statusRef.on('value', function(statusSnap) {
+        var st = statusSnap.val();
+        if (st === 'ringing' && callState === 'IDLE') {
+          statusRef.off('value', handler);
+          _activeStatusListener = null;
           incomingCall(data);
+        } else if (st === 'ended' || st === 'rejected' || st === 'missed') {
+          statusRef.off('value', handler);
+          _activeStatusListener = null;
+        } else if (st === 'ringing' && callState !== 'IDLE' && data.callId === currentCallId && data.callerId === remotePeerId) {
+          statusRef.off('value', handler);
+          _activeStatusListener = null;
+          if (auth.currentUser.uid < remotePeerId) {
+            cleanupCall();
+            incomingCall(data);
+          }
         }
       });
+      _activeStatusListener = function() { statusRef.off('value', handler); };
     }
   });
 }
