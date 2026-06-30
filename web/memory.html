@@ -156,7 +156,7 @@
       gap: 10px;
       width: 100%;
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
     }
     .status-bar {
       font-family: var(--font-heading);
@@ -178,10 +178,10 @@
       display: grid;
       gap: 4px;
       width: 100%;
-      max-width: 700px;
       flex: 1;
       align-content: center;
       justify-content: center;
+      min-height: 0;
     }
     .card {
       aspect-ratio: 1 / 1;
@@ -194,7 +194,6 @@
       justify-content: center;
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.15s;
-      font-size: 1.6rem;
       user-select: none;
       background: var(--color-sticky);
     }
@@ -336,12 +335,10 @@
       padding: 8px 0;
     }
     @media (max-width: 600px) {
-      .card { font-size: 1.1rem; }
       .board { gap: 3px; }
       .win-card { padding: 24px 20px; }
     }
     @media (max-width: 400px) {
-      .card { font-size: 0.9rem; }
       .board { gap: 2px; }
       .diff-grid { grid-template-columns: 1fr; }
     }
@@ -506,13 +503,20 @@ function startGame(diff) {
 
 function renderBoard() {
   var el = document.getElementById('board');
-  el.style.gridTemplateColumns = 'repeat(' + gridSize + ', 1fr)';
+  var gap = 4;
+  var availW = el.clientWidth;
+  var availH = el.clientHeight;
+  var cardFromW = (availW - (gridSize - 1) * gap) / gridSize;
+  var cardFromH = (availH - (gridSize - 1) * gap) / gridSize;
+  var cardSize = Math.max(24, Math.floor(Math.min(cardFromW, cardFromH)));
+  el.style.gridTemplateColumns = 'repeat(' + gridSize + ', ' + cardSize + 'px)';
   el.innerHTML = '';
   for (var i = 0; i < cards.length; i++) {
     var card = document.createElement('div');
     card.className = 'card face-down';
     card.dataset.index = i;
     card.onclick = function() { flipCard(parseInt(this.dataset.index)); };
+    card.style.fontSize = Math.round(cardSize * 0.45) + 'px';
     el.appendChild(card);
   }
 }
@@ -656,6 +660,15 @@ function loadLeaderboard(game, myScore) {
       document.getElementById('lb-content').innerHTML = '<div class="lb-empty">Could not load leaderboard.</div>';
     });
 }
+
+// Resize listener to re-fit board when window/iframe resizes
+var _resizeTimer = null;
+window.addEventListener('resize', function() {
+  if (document.getElementById('screen-board').classList.contains('active')) {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(function() { renderBoard(); }, 100);
+  }
+});
 </script>
 </body>
 </html>

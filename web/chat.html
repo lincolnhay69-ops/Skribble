@@ -189,7 +189,7 @@
               <div class="card-overlay">▶ Play</div>
             </div>
 
-            <div class="game-card game-card-blue" onclick="openGameEmbed('https://lincolnhay69-ops.github.io/Scribble-games/memory.html', 'Memory')">
+            <div class="game-card game-card-blue" onclick="openGameEmbed('memory.html', 'Memory')">
               <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><rect x="6" y="12" width="5" height="5" rx="1"/><rect x="13" y="12" width="5" height="5" rx="1"/>
               </svg>
@@ -205,7 +205,7 @@
               <div class="card-overlay">▶ Play</div>
             </div>
 
-            <div class="game-card" style="background:#bbdefb;" onclick="openGameEmbed('https://lincolnhay69-ops.github.io/Scribble-games/connect4.html', 'Connect 4')">
+            <div class="game-card" style="background:#bbdefb;" onclick="openGameEmbed('connect4.html', 'Connect 4')">
               <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <circle cx="6" cy="6" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="18" cy="6" r="2"/>
                 <circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/>
@@ -419,7 +419,7 @@
       <span id="game-embed-title" style="font-family:'Kalam',cursive;font-size:1rem;">Game</span>
       <button class="window-btn" onclick="closeGameEmbed()"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l10 10"/><path d="M13 3L3 13"/></svg></button>
     </div>
-    <iframe id="game-iframe" style="flex:1;border:none;width:100%;" sandbox="allow-scripts allow-same-origin"></iframe>
+    <iframe id="game-iframe" style="flex:1;border:none;width:100%;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
   </div>
 
   <div id="image-viewer-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeImageViewer()">
