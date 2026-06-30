@@ -448,6 +448,7 @@ function startCall(uid) {
     }
     document.getElementById('call-status-text').textContent = 'Calling...';
     populateAudioDevices();
+    focusCallWindow();
 
     db.ref('users/' + uid).once('value', function(userSnap) {
       var userData = userSnap.val() || {};
@@ -516,18 +517,14 @@ function incomingCall(data) {
   var modal = document.getElementById('incoming-call-modal');
   if (modal) modal.style.display = 'flex';
 
-  if (window.__TAURI__) {
-    window.__TAURI__.window.getCurrentWindow().setFocus();
-    window.__TAURI__.core.invoke('show_window').catch(function() {});
-    // Also fire a notification for incoming call
-    db.ref('users/' + callerId + '/displayName').once('value', function(nameSnap) {
-      var callerName = getFriendName(callerId, nameSnap.val() || 'Someone');
-      notifyMessage({ senderId: callerId, senderName: callerName, text: 'Incoming voice call...' }, 'Call');
-    });
-  }
+  focusCallWindow();
+  // Also fire a notification for incoming call
+  db.ref('users/' + callerId + '/displayName').once('value', function(nameSnap) {
+    var callerName = getFriendName(callerId, nameSnap.val() || 'Someone');
+    notifyMessage({ senderId: callerId, senderName: callerName, text: 'Incoming voice call...' }, 'Call');
+  });
 
   playRingtone();
-  listenForCallStatus();
 
   setTimeout(function() {
     if (callState === 'RINGING') {
@@ -636,6 +633,15 @@ function focusCallScreen() {
   var right = document.getElementById('header-right-section');
   if (left && left._hiddenByCall) { left.style.display = 'flex'; delete left._hiddenByCall; }
   if (right && right._hiddenByCall) { right.style.display = 'flex'; delete right._hiddenByCall; }
+}
+
+function focusCallWindow() {
+  if (window.__TAURI__) {
+    window.__TAURI__.window.getCurrentWindow().setFocus();
+    window.__TAURI__.core.invoke('show_window').catch(function() {});
+  } else {
+    window.focus();
+  }
 }
 
 function cleanupCall() {
