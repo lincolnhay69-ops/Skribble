@@ -26,6 +26,7 @@ var _callStatusRef = null;
 var _callerIceRef = null;
 var _calleeIceRef = null;
 var _incomingCallRef = null;
+var _ringStatusRef = null;
 var _ringtoneCtx = null;
 var _ringtoneInterval = null;
 
@@ -526,6 +527,16 @@ function incomingCall(data) {
 
   playRingtone();
 
+  // Listen for caller hangup while ringing (does not react to 'connecting')
+  if (_ringStatusRef) _ringStatusRef.off();
+  _ringStatusRef = db.ref('calls/' + currentCallId + '/status');
+  _ringStatusRef.on('value', function(snap) {
+    var status = snap.val();
+    if ((status === 'ended' || status === 'rejected' || status === 'missed') && callState === 'RINGING') {
+      cleanupCall();
+    }
+  });
+
   setTimeout(function() {
     if (callState === 'RINGING') {
       db.ref('calls/' + currentCallId + '/status').set('missed');
@@ -538,6 +549,7 @@ function answerCall() {
   if (callState !== 'RINGING') return;
   callState = 'CONNECTING';
   stopRingtone();
+  if (_ringStatusRef) { _ringStatusRef.off(); _ringStatusRef = null; }
   document.getElementById('incoming-call-modal').style.display = 'none';
 
   var screen = document.getElementById('call-screen');
@@ -648,6 +660,7 @@ function cleanupCall() {
   stopRingtone();
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
   if (_callStatusRef) { _callStatusRef.off(); _callStatusRef = null; }
+  if (_ringStatusRef) { _ringStatusRef.off(); _ringStatusRef = null; }
   if (_callerIceRef) { _callerIceRef.off(); _callerIceRef = null; }
   if (_calleeIceRef) { _calleeIceRef.off(); _calleeIceRef = null; }
 
