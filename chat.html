@@ -326,6 +326,10 @@
           <h3 id="call-peer-name" style="font-family:'Kalam',cursive;font-size:1.5rem;margin-bottom:4px;">Unknown</h3>
           <p id="call-status-text" style="font-size:0.9rem;color:rgba(45,45,45,0.5);margin-bottom:8px;">Calling...</p>
           <div id="call-timer" style="font-size:2rem;font-family:'Kalam',cursive;margin-bottom:24px;">00:00</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;width:100%;">
+            <select id="call-mic-select" style="padding:6px 10px;border:2px solid var(--color-border);border-radius:255px;font-family:var(--font-body);font-size:0.8rem;background:var(--color-background);color:var(--color-foreground);" onchange="switchMic(this.value)"></select>
+            <select id="call-speaker-select" style="padding:6px 10px;border:2px solid var(--color-border);border-radius:255px;font-family:var(--font-body);font-size:0.8rem;background:var(--color-background);color:var(--color-foreground);" onchange="switchSpeaker(this.value)"></select>
+          </div>
           <div style="display:flex;gap:16px;justify-content:center;">
             <button id="call-mute-btn" class="btn btn-secondary" style="width:60px;height:60px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;" onclick="toggleMute()" title="Mute">
               <svg id="call-mute-icon" viewBox="0 0 16 16" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5A2 2 0 0112 4v3a2.5 2.5 0 01-5 0V4a2 2 0 01-.5-1.5z"/><path d="M3 9v0a5 5 0 005 5v0a5 5 0 005-5"/><path d="M8 14v2"/></svg>
