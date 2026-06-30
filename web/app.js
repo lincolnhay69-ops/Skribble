@@ -347,6 +347,10 @@ function createPeerConnection() {
   };
   pc.ontrack = function(event) {
     remoteStream = event.streams[0];
+    var el = document.getElementById('call-remote-audio');
+    if (!el) { el = document.createElement('audio'); el.id = 'call-remote-audio'; el.autoplay = true; document.body.appendChild(el); }
+    el.srcObject = remoteStream;
+    el.play().catch(function(){});
   };
   pc.oniceconnectionstatechange = function() {
     if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
@@ -363,6 +367,7 @@ function createPeerConnection() {
     } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
       if (callState === 'CONNECTED' || callState === 'CONNECTING') {
         showToast('Call disconnected');
+        if (currentCallId) db.ref('calls/' + currentCallId + '/status').set('ended');
         cleanupCall();
       }
     }
@@ -442,6 +447,7 @@ function startCall(uid) {
       screen.style.position = 'absolute';
     }
     document.getElementById('call-status-text').textContent = 'Calling...';
+    populateAudioDevices();
 
     db.ref('users/' + uid).once('value', function(userSnap) {
       var userData = userSnap.val() || {};
@@ -521,6 +527,7 @@ function incomingCall(data) {
   }
 
   playRingtone();
+  listenForCallStatus();
 
   setTimeout(function() {
     if (callState === 'RINGING') {
@@ -542,6 +549,7 @@ function answerCall() {
     screen.style.position = 'absolute';
   }
   document.getElementById('call-status-text').textContent = 'Connecting...';
+  populateAudioDevices();
 
   db.ref('users/' + remotePeerId).once('value', function(userSnap) {
     var userData = userSnap.val() || {};
@@ -594,6 +602,19 @@ function hangUp() {
   cleanupCall();
 }
 
+function showCallBar() {
+  var bar = document.getElementById('call-header-bar');
+  if (bar) { bar.style.display = 'flex'; bar.style.flex = '1'; }
+  var left = document.getElementById('header-left-section');
+  var right = document.getElementById('header-right-section');
+  if (left) { left.style.display = 'none'; left._hiddenByCall = true; }
+  if (right) { right.style.display = 'none'; right._hiddenByCall = true; }
+  var name = document.getElementById('call-peer-name');
+  if (name) document.getElementById('call-header-name').textContent = name.textContent;
+  var timer = document.getElementById('call-timer');
+  if (timer) document.getElementById('call-header-timer').textContent = timer.textContent;
+}
+
 function minimizeCall() {
   document.getElementById('call-screen').style.display = 'none';
   document.getElementById('call-header-bar').style.display = 'flex';
@@ -634,6 +655,8 @@ function cleanupCall() {
   if (localStream) { localStream.getTracks().forEach(function(t) { t.stop(); }); localStream = null; }
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
   remoteStream = null;
+  var audioEl = document.getElementById('call-remote-audio');
+  if (audioEl) { audioEl.pause(); audioEl.srcObject = null; }
   callState = 'IDLE';
   currentCallId = null;
   remotePeerId = null;
@@ -669,13 +692,14 @@ function startCallTimer() {
 function toggleMute() {
   if (localStream) {
     var tracks = localStream.getAudioTracks();
-    var muted = tracks.length > 0 && tracks[0].enabled;
-    tracks.forEach(function(t) { t.enabled = muted; });
+    if (!tracks.length) return;
+    var muted = !tracks[0].enabled;
+    tracks.forEach(function(t) { t.enabled = !muted; });
     var btn = document.getElementById('call-mute-btn');
     var headerBtn = document.getElementById('call-header-mute');
     [btn, headerBtn].forEach(function(b) {
       if (b) {
-        b.classList.toggle('muted', !muted);
+        b.classList.toggle('muted', muted);
         b.title = muted ? 'Unmute' : 'Mute';
         b.style.background = muted ? '#e74c3c' : '';
       }
@@ -691,6 +715,62 @@ function toggleMute() {
       if (icon) icon.innerHTML = onPath;
       if (headerIcon) headerIcon.innerHTML = onPath;
     }
+  }
+}
+
+function populateAudioDevices() {
+  navigator.mediaDevices.enumerateDevices().then(function(devices) {
+    var micSel = document.getElementById('call-mic-select');
+    var spkSel = document.getElementById('call-speaker-select');
+    if (micSel) {
+      var currentMic = micSel.value;
+      micSel.innerHTML = '<option value="">Default Microphone</option>';
+      devices.forEach(function(d) {
+        if (d.kind === 'audioinput') {
+          var opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || 'Microphone (' + d.deviceId.slice(0,8) + '...)';
+          if (d.deviceId === currentMic) opt.selected = true;
+          micSel.appendChild(opt);
+        }
+      });
+    }
+    if (spkSel) {
+      var currentSpk = spkSel.value;
+      spkSel.innerHTML = '<option value="">Default Speaker</option>';
+      devices.forEach(function(d) {
+        if (d.kind === 'audiooutput') {
+          var opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || 'Speaker (' + d.deviceId.slice(0,8) + '...)';
+          if (d.deviceId === currentSpk) opt.selected = true;
+          spkSel.appendChild(opt);
+        }
+      });
+    }
+  }).catch(function(){});
+}
+
+function switchMic(deviceId) {
+  if (!localStream || !peerConnection) return;
+  var constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true, video: false };
+  navigator.mediaDevices.getUserMedia(constraints).then(function(newStream) {
+    var newTrack = newStream.getAudioTracks()[0];
+    if (!newTrack) { newStream.getTracks().forEach(function(t){t.stop();}); return; }
+    var sender = peerConnection.getSenders().find(function(s) { return s.track && s.track.kind === 'audio'; });
+    if (sender) sender.replaceTrack(newTrack);
+    localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+    localStream.addTrack(newTrack);
+  }).catch(function(err) {
+    showToast('Mic switch failed: ' + err.message);
+  });
+}
+
+function switchSpeaker(deviceId) {
+  if (!deviceId) return;
+  var el = document.getElementById('call-remote-audio');
+  if (el && typeof el.setSinkId === 'function') {
+    el.setSinkId(deviceId).catch(function(){});
   }
 }
 
